@@ -1,89 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
-import Gallery from './components/Gallery';
-import Viewer from './components/Viewer';
-import './App.css';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import Header from './components/Header';
+import GalleryPage from './pages/GalleryPage';
+import SettingsPage from './pages/SettingsPage';
+import RandomPage from './pages/RandomPage';
 
 function App() {
-  const [files, setFiles] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(null);
-  const [showFullSize, setShowFullSize] = useState(false);
-  const [sortOrder, setSortOrder] = useState('default'); // 'default' or 'random'
-
-  const fetchFiles = useCallback(async () => {
-    try {
-      const url = `/api/files${sortOrder === 'random' ? '?sort=random' : ''}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
-      setFiles(data);
-    } catch (error) {
-      console.error("Failed to fetch files:", error);
-      setFiles([]);
-    }
-  }, [sortOrder]);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const location = useLocation(); // Get the current route location
 
   useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
+    document.body.className = '';
+    document.body.classList.add(`${theme}-theme`);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
-  const handleShuffle = () => {
-    setSortOrder(prev => (prev === 'random' ? 'default' : 'random'));
+  const toggleTheme = () => {
+    setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
   };
 
-  const handleLike = async (filename) => {
-    try {
-      await fetch(`/api/like/${filename}`, { method: 'POST' });
-      fetchFiles();
-    } catch (error) {
-      console.error("Failed to like file:", error);
-    }
-  };
-
-  const handleDelete = async (filename) => {
-    if (window.confirm(`Are you sure you want to delete ${filename}?`)) {
-      try {
-        await fetch(`/api/delete/${filename}`, { method: 'DELETE' });
-        fetchFiles();
-      } catch (error) {
-        console.error("Failed to delete file:", error);
-      }
-    }
-  };
-  
-  const openViewer = (index) => setCurrentIndex(index);
-  const closeViewer = () => setCurrentIndex(null);
+  // Check if the current page is the random page
+  const isRandomPage = location.pathname === '/random';
 
   return (
     <div className="app-container">
-      <h1>Media Gallery</h1>
-      <div className="settings">
-        <div className="setting-item">
-            <input
-              type="checkbox"
-              id="full-size-toggle"
-              checked={showFullSize}
-              onChange={(e) => setShowFullSize(e.target.checked)}
-            />
-            <label htmlFor="full-size-toggle">Show Full-Size</label>
-        </div>
-        <button onClick={handleShuffle} className="shuffle-button">
-            {sortOrder === 'random' ? 'Sorted Order' : 'Shuffle'}
-        </button>
-      </div>
+      {/* Conditionally render the Header */}
+      {!isRandomPage && <Header currentTheme={theme} toggleTheme={toggleTheme} />}
       
-      <Gallery files={files} onImageClick={openViewer} />
-
-      {currentIndex !== null && (
-        <Viewer
-          files={files}
-          currentIndex={currentIndex}
-          onClose={closeViewer}
-          onLike={handleLike}
-          onDelete={handleDelete}
-          showFullSize={showFullSize}
-          setCurrentIndex={setCurrentIndex}
-        />
-      )}
+      <main className={!isRandomPage ? "main-content" : "main-content-full"}>
+        <Routes>
+          <Route path="/" element={<GalleryPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/random" element={<RandomPage />} />
+        </Routes>
+      </main>
     </div>
   );
 }

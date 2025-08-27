@@ -1,8 +1,37 @@
+services:
+  # Backend API Service
+  api:
+    build:
+      context: ./backend
+    ports:
+      # Maps host port (from .env, defaults 5000) to container's port 5000
+      - "${API_PORT:-5000}:5000"
+    volumes:
+      # Persist the generated previews
+      # - /pathchamgeme:/mnt/cache_preview
+      # Persist the generated thumbnails
+      # - /pathchamgeme:/mnt/cache_thumb
+      # Persist media files on your host machine
+      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/all
+      # - /mnt/z/Locals/system/outputs-f15/txt2img-images/2025-04:/app/media/all
+      - /mnt/z/Locals/system/outputs-f15/txt2img-images/liked:/mnt/liked
+    restart: unless-stopped
+
+  # Frontend Portal Service
+  portal:
+    build:
+      context: ./frontend
+    ports:
+      # Maps host port (from .env, defaults 8080) to container's port 80
+      - "${PORTAL_PORT:-8080}:80"
+    depends_on:
+      - api # Ensures the backend starts before the frontend
+    restart: unless-stopped
+
 # services:
 #   # Backend API Service
 #   api:
-#     build:
-#       context: ./backend
+#     image: nikiakbar/media-viewer-api:latest
 #     ports:
 #       # Maps host port (from .env, defaults 5000) to container's port 5000
 #       - "${API_PORT:-5000}:5000"
@@ -13,33 +42,10 @@
 
 #   # Frontend Portal Service
 #   portal:
-#     build:
-#       context: ./frontend
+#     image: nikiakbar/media-viewer-portal:latest
 #     ports:
 #       # Maps host port (from .env, defaults 8080) to container's port 80
 #       - "${PORTAL_PORT:-8080}:80"
 #     depends_on:
 #       - api # Ensures the backend starts before the frontend
 #     restart: unless-stopped
-
-services:
-  # Backend API Service
-  api:
-    image: nikiakbar/media-viewer-api:latest
-    ports:
-      # Maps host port (from .env, defaults 5000) to container's port 5000
-      - "${API_PORT:-5000}:5000"
-    volumes:
-      # Persist media files on your host machine
-      - ./backend/media:/app/media
-    restart: unless-stopped
-
-  # Frontend Portal Service
-  portal:
-    image: nikiakbar/media-viewer-portal:latest
-    ports:
-      # Maps host port (from .env, defaults 8080) to container's port 80
-      - "${PORTAL_PORT:-8080}:80"
-    depends_on:
-      - api # Ensures the backend starts before the frontend
-    restart: unless-stopped
