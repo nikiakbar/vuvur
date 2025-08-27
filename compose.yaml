@@ -4,7 +4,7 @@ services:
     build:
       context: ./backend
     ports:
-      # Maps the host port (from .env, defaults to 5000) to the container's port 5000
+      # Maps host port (from .env, defaults 5000) to container's port 5000
       - "${API_PORT:-5000}:5000"
     volumes:
       # Persist media files on your host machine
@@ -16,7 +16,7 @@ services:
     build:
       context: ./frontend
     ports:
-      # Maps the host port (from .env, defaults to 8080) to the container's port 80 (Nginx)
+      # Maps host port (from .env, defaults 8080) to container's port 80
       - "${PORTAL_PORT:-8080}:80"
     depends_on:
       - api # Ensures the backend starts before the frontend
