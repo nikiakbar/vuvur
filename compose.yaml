@@ -1,8 +1,31 @@
+# services:
+#   # Backend API Service
+#   api:
+#     build:
+#       context: ./backend
+#     ports:
+#       # Maps host port (from .env, defaults 5000) to container's port 5000
+#       - "${API_PORT:-5000}:5000"
+#     volumes:
+#       # Persist media files on your host machine
+#       - ./backend/media:/app/media
+#     restart: unless-stopped
+
+#   # Frontend Portal Service
+#   portal:
+#     build:
+#       context: ./frontend
+#     ports:
+#       # Maps host port (from .env, defaults 8080) to container's port 80
+#       - "${PORTAL_PORT:-8080}:80"
+#     depends_on:
+#       - api # Ensures the backend starts before the frontend
+#     restart: unless-stopped
+
 services:
   # Backend API Service
   api:
-    build:
-      context: ./backend
+    image: nikiakbar/media-viewer-api:latest
     ports:
       # Maps host port (from .env, defaults 5000) to container's port 5000
       - "${API_PORT:-5000}:5000"
@@ -13,8 +36,7 @@ services:
 
   # Frontend Portal Service
   portal:
-    build:
-      context: ./frontend
+    image: nikiakbar/media-viewer-portal:latest
     ports:
       # Maps host port (from .env, defaults 8080) to container's port 80
       - "${PORTAL_PORT:-8080}:80"
