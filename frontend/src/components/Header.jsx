@@ -15,27 +15,28 @@ function Header({ currentTheme, toggleTheme }) {
             <circle cx="35" cy="35" r="10" fill="var(--logo-bg)" />
             <polygon points="55,55 75,25 90,45 80,65" fill="var(--logo-bg)" />
         </svg>
-        <span className="logo-text">Media Viewer</span>
+        <span className="logo-text">Vuvur</span>
       </Link>
       
-      <div className="menu-container">
-        <button className="hamburger-button" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-          ☰
-        </button>
-        {isMenuOpen && (
-          <div className="dropdown-menu">
-            <button className="menu-item" onClick={toggleTheme}>
-              Toggle {currentTheme === 'light' ? 'Dark' : 'Light'} Mode
-            </button>
-            {/* New "Random" link */}
-            <Link to="/random" className="menu-item" onClick={closeMenu}>
-              Random
-            </Link>
-            <Link to="/settings" className="menu-item" onClick={closeMenu}>
-              Settings
-            </Link>
-          </div>
-        )}
+      <div className="header-actions">
+        <Link to="/random" className="header-action-button">
+          Random
+        </Link>
+        <div className="menu-container">
+          <button className="hamburger-button" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            ☰
+          </button>
+          {isMenuOpen && (
+            <div className="dropdown-menu">
+              <button className="menu-item" onClick={toggleTheme}>
+                Toggle {currentTheme === 'light' ? 'Dark' : 'Light'} Mode
+              </button>
+              <Link to="/settings" className="menu-item" onClick={closeMenu}>
+                Settings
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

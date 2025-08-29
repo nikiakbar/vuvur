@@ -2,84 +2,51 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
 
-const BATCH_SIZE = 50;
-
-function ScanningDisplay({ progress, total }) {
-  const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
-  return (
-    <div className="scanning-container">
-      <h2>Scanning Library (First-Time Setup)</h2>
-      <p>Please wait, this may take several minutes for a large collection...</p>
-      <progress value={progress} max={total}></progress>
-      <p>{percent}% Complete</p>
-      <p>({progress} / {total} files scanned)</p>
-    </div>
-  );
-}
-
-function GalleryPage() {
+function GalleryPage({ batchSize }) { // Receive batchSize as a prop
   const [files, setFiles] = useState([]);
-  const [scanStatus, setScanStatus] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
+  // Use the batchSize prop for the initial visible count
+  const [visibleCount, setVisibleCount] = useState(batchSize);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [showFullSize, setShowFullSize] = useState(false);
   const [sortOrder, setSortOrder] = useState('default');
   
   const observer = useRef();
 
+  // Reset visible count if the batch size changes from settings
+  useEffect(() => {
+    setVisibleCount(batchSize);
+  }, [batchSize]);
+  
   const lastImageElementRef = useCallback(node => {
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && files.length > visibleCount) {
-        setVisibleCount(prev => prev + BATCH_SIZE);
+        // Use the batchSize prop to load the next batch
+        setVisibleCount(prev => prev + batchSize);
       }
     });
     if (node) observer.current.observe(node);
-  }, [files.length, visibleCount]);
+  }, [files.length, visibleCount, batchSize]);
 
   const fetchFiles = useCallback(async () => {
     try {
       const url = `/api/files${sortOrder === 'random' ? '?sort=random' : ''}`;
       const response = await fetch(url);
+      if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
-      
-      if (data.status === 'scanning') {
-        setScanStatus(data);
-      } else {
-        setFiles(data);
-        setScanStatus({ status: 'complete' });
-      }
+      setFiles(data);
     } catch (error) {
       console.error("Failed to fetch files:", error);
       setFiles([]);
     }
   }, [sortOrder]);
 
-  // Main effect to fetch initial data and poll for scan status
   useEffect(() => {
-    fetchFiles(); // Initial fetch
-    
-    let intervalId;
-    // If the status is scanning, start polling
-    if (scanStatus?.status === 'scanning') {
-      intervalId = setInterval(async () => {
-        const res = await fetch('/api/scan-status');
-        const data = await res.json();
-        setScanStatus(data);
-        if (data.status === 'complete') {
-          fetchFiles(); // Fetch the final file list
-          clearInterval(intervalId);
-        }
-      }, 2000); // Poll every 2 seconds
-    }
-    
-    // Cleanup interval on component unmount
-    return () => clearInterval(intervalId);
-  }, [sortOrder, scanStatus?.status, fetchFiles]);
-
+    fetchFiles();
+  }, [fetchFiles]);
 
   const handleShuffle = () => {
-    setVisibleCount(BATCH_SIZE);
+    setVisibleCount(batchSize);
     setSortOrder(prev => (prev === 'random' ? 'default' : 'random'));
   };
 
@@ -109,14 +76,6 @@ function GalleryPage() {
   const closeViewer = () => setCurrentIndex(null);
 
   const visibleFiles = files.slice(0, visibleCount);
-
-  // Conditional Rendering based on scan status
-  if (!scanStatus) {
-    return <div>Loading...</div>;
-  }
-  if (scanStatus.status === 'scanning') {
-    return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
-  }
 
   return (
     <>

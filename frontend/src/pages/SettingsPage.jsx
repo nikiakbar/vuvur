@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function SettingsPage() {
+function SettingsPage({ batchSize, onBatchSizeChange }) {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -24,6 +24,22 @@ function SettingsPage() {
   return (
     <div className="settings-page">
       <h2>Settings</h2>
+      
+      <div className="settings-section">
+        <h3>Gallery Settings</h3>
+        <div className="setting-option">
+          <label htmlFor="batch-size-input">Images per scroll</label>
+          <input
+            type="number"
+            id="batch-size-input"
+            value={batchSize}
+            onChange={(e) => onBatchSizeChange(e.target.value)}
+            min="1"
+            step="5"
+          />
+        </div>
+      </div>
+      
       <div className="settings-section">
         <h3>Thumbnail Cache</h3>
         <p>

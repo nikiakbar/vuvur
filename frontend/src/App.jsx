@@ -7,7 +7,8 @@ import RandomPage from './pages/RandomPage';
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const location = useLocation(); // Get the current route location
+  // New state for infinite scroll batch size, defaults to 20
+  const [batchSize, setBatchSize] = useState(() => parseInt(localStorage.getItem('batchSize')) || 20);
 
   useEffect(() => {
     document.body.className = '';
@@ -19,18 +20,28 @@ function App() {
     setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
   };
 
-  // Check if the current page is the random page
+  const handleBatchSizeChange = (newSize) => {
+    const size = parseInt(newSize);
+    if (size > 0) {
+      setBatchSize(size);
+      localStorage.setItem('batchSize', size);
+    }
+  };
+
+  const location = useLocation();
   const isRandomPage = location.pathname === '/random';
 
   return (
     <div className="app-container">
-      {/* Conditionally render the Header */}
       {!isRandomPage && <Header currentTheme={theme} toggleTheme={toggleTheme} />}
       
       <main className={!isRandomPage ? "main-content" : "main-content-full"}>
         <Routes>
-          <Route path="/" element={<GalleryPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/" element={<GalleryPage batchSize={batchSize} />} />
+          <Route 
+            path="/settings" 
+            element={<SettingsPage batchSize={batchSize} onBatchSizeChange={handleBatchSizeChange} />} 
+          />
           <Route path="/random" element={<RandomPage />} />
         </Routes>
       </main>
