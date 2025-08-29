@@ -1,60 +1,74 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import ImageSlide from '../components/ImageSlide'; // Import the new component
 
 function RandomPage() {
-  const [randomFiles, setRandomFiles] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [files, setFiles] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const observer = useRef();
 
-  // Add a class to the body to hide scrollbars when this component mounts
+  const loadNextImage = useCallback(async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/files/random?count=1');
+      if (!response.ok) throw new Error('Network response was not ok');
+      const data = await response.json();
+      if (data.length > 0) {
+        setFiles(prevFiles => [...prevFiles, ...data]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch random file:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading]);
+  
+  const lastImageElementRef = useCallback(node => {
+    if (isLoading) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        loadNextImage();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [isLoading, loadNextImage]);
+
   useEffect(() => {
     document.body.classList.add('no-scroll');
-    // Cleanup function to remove the class when the component unmounts
+    loadNextImage();
     return () => {
       document.body.classList.remove('no-scroll');
     };
   }, []);
 
-  const fetchRandomFiles = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/files?sort=random');
-      if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
-      setRandomFiles(data);
-    } catch (error) {
-      console.error("Failed to fetch random files:", error);
-      setRandomFiles([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchRandomFiles();
-  }, [fetchRandomFiles]);
-
-  if (isLoading) {
+  if (files.length === 0 && isLoading) {
     return <div className="loading-fullscreen">Loading...</div>;
   }
 
-  if (randomFiles.length === 0) {
+  if (files.length === 0 && !isLoading) {
     return <div className="loading-fullscreen">No images found.</div>;
   }
 
   return (
     <div className="viewer-overlay standalone-page fullscreen">
-      {/* Add a subtle link/button to go back home */}
       <Link to="/" className="close-button standalone-close-button" title="Back to Gallery">
         &times;
       </Link>
-      {randomFiles.map((file) => (
-        <div key={file.path} className="viewer-slide">
-          <div className="viewer-image-container">
-            {/* Using the higher quality preview for the full-screen view */}
-            <img src={`/api/preview/${encodeURIComponent(file.path)}`} alt={file.path} />
+      {files.map((file, index) => {
+        const isLastElement = index === files.length - 1;
+        return (
+          <div 
+            ref={isLastElement ? lastImageElementRef : null} 
+            key={file.path} 
+            className="viewer-slide"
+          >
+            <ImageSlide file={file} showControls={false} />
           </div>
-        </div>
-      ))}
+        );
+      })}
+      {isLoading && files.length > 0 && <div className="loading-spinner"></div>}
     </div>
   );
 }

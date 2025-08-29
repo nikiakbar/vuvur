@@ -3,6 +3,7 @@ import shutil
 import random
 import json
 import time
+import threading
 from flask import Flask, jsonify, send_from_directory, abort, send_file, request
 from flask_cors import CORS
 from PIL import Image, UnidentifiedImageError
@@ -14,21 +15,19 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Configuration ---
-# THIS IS THE ONLY LINE THAT CHANGES
 MEDIA_DIR = '/mnt' 
-
 ALL_DIR = os.path.join(MEDIA_DIR, 'all')
 LIKED_DIR = os.path.join(MEDIA_DIR, 'liked')
 PREVIEW_CACHE_DIR = os.path.join(MEDIA_DIR, 'cache_preview')
 THUMB_CACHE_DIR = os.path.join(MEDIA_DIR, 'cache_thumb')
 FILE_LIST_CACHE = os.path.join(MEDIA_DIR, 'file_list_cache.json')
+PREVIEW_MAX_WIDTH, PREVIEW_QUALITY = 800, 90
+THUMB_MAX_WIDTH, THUMB_QUALITY = 250, 80
 
-PREVIEW_MAX_WIDTH = 800
-PREVIEW_QUALITY = 90
-THUMB_MAX_WIDTH = 250
-THUMB_QUALITY = 80
+# --- Global variable to track scan status ---
+SCAN_STATUS = {"scanning": False, "progress": 0, "total": 0}
 
-# --- Ensure media directories exist ---
+# --- Directory Setup ---
 os.makedirs(ALL_DIR, exist_ok=True)
 os.makedirs(LIKED_DIR, exist_ok=True)
 os.makedirs(PREVIEW_CACHE_DIR, exist_ok=True)
@@ -36,10 +35,21 @@ os.makedirs(THUMB_CACHE_DIR, exist_ok=True)
 
 
 def scan_and_cache_files():
-    """Scans all files to get dimensions and saves the result to a JSON cache file."""
-    print("Performing a full directory scan...")
+    """Scans all files and saves the result to a JSON cache file."""
+    global SCAN_STATUS
+    if SCAN_STATUS["scanning"]:
+        return
+
+    SCAN_STATUS = {"scanning": True, "progress": 0, "total": 0}
+    print("Starting background directory scan...")
+
+    # First, count total files for progress tracking
+    total_files = sum(len(files) for _, _, files in os.walk(ALL_DIR))
+    SCAN_STATUS["total"] = total_files
+    
     all_files_with_dims = []
-    for root, dirs, files in os.walk(ALL_DIR):
+    scanned_count = 0
+    for root, _, files in os.walk(ALL_DIR):
         for filename in files:
             try:
                 full_path = os.path.join(root, filename)
@@ -47,49 +57,70 @@ def scan_and_cache_files():
                 with Image.open(full_path) as img:
                     width, height = img.size
                 all_files_with_dims.append({
-                    "path": relative_path,
-                    "width": width,
-                    "height": height
+                    "path": relative_path, "width": width, "height": height
                 })
             except (UnidentifiedImageError, FileNotFoundError):
-                continue
-    
+                pass
+            finally:
+                scanned_count += 1
+                SCAN_STATUS["progress"] = scanned_count
+
     with open(FILE_LIST_CACHE, 'w') as f:
         json.dump(all_files_with_dims, f)
     
+    SCAN_STATUS = {"scanning": False, "progress": total_files, "total": total_files}
     print(f"Scan complete. Cached {len(all_files_with_dims)} files.")
     return all_files_with_dims
 
+def background_scanner_task():
+    """The task for the background thread."""
+    if not os.path.exists(FILE_LIST_CACHE):
+        scan_and_cache_files()
 
 @app.route('/api/files')
 def list_files():
-    """Returns a list of file objects, using a cache to avoid slow scans."""
-    sort_order = request.args.get('sort', 'default')
-    
-    try:
-        cache_age = time.time() - os.path.getmtime(FILE_LIST_CACHE)
-        if cache_age < 3600: # 1 hour in seconds
-            print("Loading file list from cache.")
-            with open(FILE_LIST_CACHE, 'r') as f:
-                all_files_with_dims = json.load(f)
-        else:
-            all_files_with_dims = scan_and_cache_files()
-    except FileNotFoundError:
-        all_files_with_dims = scan_and_cache_files()
-
-    if sort_order == 'random':
-        random.shuffle(all_files_with_dims)
-    else:
-        all_files_with_dims.sort(key=lambda x: x['path'])
+    """Returns file list if cache exists, otherwise returns scan status."""
+    if os.path.exists(FILE_LIST_CACHE):
+        with open(FILE_LIST_CACHE, 'r') as f:
+            all_files_with_dims = json.load(f)
         
-    return jsonify(all_files_with_dims)
+        sort_order = request.args.get('sort', 'default')
+        if sort_order == 'random':
+            random.shuffle(all_files_with_dims)
+        else:
+            all_files_with_dims.sort(key=lambda x: x['path'])
+        return jsonify(all_files_with_dims)
+    else:
+        # If scan isn't running, start it
+        if not SCAN_STATUS["scanning"]:
+            threading.Thread(target=scan_and_cache_files, daemon=True).start()
+        return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
 
+@app.route('/api/scan-status')
+def get_scan_status():
+    """Endpoint for the frontend to poll for scan progress."""
+    if not SCAN_STATUS["scanning"] and os.path.exists(FILE_LIST_CACHE):
+         return jsonify({"status": "complete"})
+    return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
+
+# ... (The rest of your endpoints: /random, /exif, /thumbnail, etc. remain the same) ...
+@app.route('/api/files/random')
+def random_files():
+    try:
+        count = int(request.args.get('count', 1))
+        if not os.path.exists(FILE_LIST_CACHE): return jsonify([]) # Return empty if cache not built
+        with open(FILE_LIST_CACHE, 'r') as f: all_files = json.load(f)
+        if not all_files: return jsonify([])
+        count = min(count, len(all_files))
+        random_sample = random.sample(all_files, k=count)
+        return jsonify(random_sample)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/exif/<path:filename>')
 def get_exif_data(filename):
     source_path = os.path.join(ALL_DIR, filename)
-    if not os.path.exists(source_path):
-        abort(404)
+    if not os.path.exists(source_path): abort(404)
     try:
         img = Image.open(source_path)
         exif_data = {}
@@ -99,15 +130,11 @@ def get_exif_data(filename):
                 for tag, value in exif_info.items():
                     decoded_tag = TAGS.get(tag, tag)
                     if isinstance(value, bytes):
-                        try:
-                            value = value.decode('utf-8', errors='ignore')
-                        except:
-                            value = repr(value)
+                        try: value = value.decode('utf-8', errors='ignore')
+                        except: value = repr(value)
                     exif_data[decoded_tag] = value
-        if 'parameters' in img.info:
-            exif_data['parameters'] = img.info['parameters']
-        elif 'Comment' in exif_data:
-             exif_data['parameters'] = exif_data['Comment']
+        if 'parameters' in img.info: exif_data['parameters'] = img.info['parameters']
+        elif 'Comment' in exif_data: exif_data['parameters'] = exif_data['Comment']
         return jsonify(exif_data)
     except Exception as e:
         return jsonify({"error": f"Could not read EXIF data: {str(e)}"})
@@ -122,19 +149,16 @@ def serve_preview_image(filename):
 
 def generate_and_serve_image(filename, cache_dir, max_width, quality):
     cache_path = os.path.join(cache_dir, filename)
-    if os.path.exists(cache_path):
-        return send_from_directory(cache_dir, filename)
+    if os.path.exists(cache_path): return send_from_directory(cache_dir, filename)
     source_path = os.path.join(ALL_DIR, filename)
-    if not os.path.exists(source_path):
-        abort(404)
+    if not os.path.exists(source_path): abort(404)
     try:
         img = Image.open(source_path)
         if img.size[0] > max_width:
             w_percent = (max_width / float(img.size[0]))
             h_size = int((float(img.size[1]) * float(w_percent)))
             img = img.resize((max_width, h_size), Image.Resampling.LANCZOS)
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
+        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         img.save(cache_path, 'JPEG', quality=quality)
         return send_from_directory(cache_dir, filename)
@@ -143,6 +167,11 @@ def generate_and_serve_image(filename, cache_dir, max_width, quality):
 
 @app.route('/api/cache/cleanup', methods=['POST'])
 def cleanup_cache():
+    # When cleaning up, also delete the file list cache to force a new scan
+    if os.path.exists(FILE_LIST_CACHE):
+        os.remove(FILE_LIST_CACHE)
+        print("File list cache cleared.")
+    # ... (rest of cleanup logic is the same)
     deleted_count = 0
     source_files = set()
     for root, _, files in os.walk(ALL_DIR):
@@ -156,10 +185,7 @@ def cleanup_cache():
                 if cached_file_rel_path not in source_files:
                     os.remove(os.path.join(root, filename))
                     deleted_count += 1
-    if os.path.exists(FILE_LIST_CACHE):
-        os.remove(FILE_LIST_CACHE)
-        print("File list cache cleared.")
-    return jsonify({"message": "Cache cleanup successful.", "deleted_files": deleted_count}), 200
+    return jsonify({"message": "Cache cleanup successful. File list will be regenerated on next visit.", "deleted_files": deleted_count}), 200
 
 @app.route('/api/view/all/<path:filename>')
 def serve_full_file(filename):
@@ -189,4 +215,8 @@ def delete_file(filename):
     return jsonify({"error": "File not found"}), 404
 
 if __name__ == '__main__':
+    # Start the background scanner thread if the cache doesn't exist.
+    if not os.path.exists(FILE_LIST_CACHE):
+       scanner_thread = threading.Thread(target=background_scanner_task, daemon=True)
+       scanner_thread.start()
     app.run(host='0.0.0.0', port=5000)

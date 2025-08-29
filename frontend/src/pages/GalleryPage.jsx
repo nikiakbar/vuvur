@@ -2,19 +2,31 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
 
-const BATCH_SIZE = 50; // How many images to load at a time
+const BATCH_SIZE = 50;
+
+function ScanningDisplay({ progress, total }) {
+  const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
+  return (
+    <div className="scanning-container">
+      <h2>Scanning Library (First-Time Setup)</h2>
+      <p>Please wait, this may take several minutes for a large collection...</p>
+      <progress value={progress} max={total}></progress>
+      <p>{percent}% Complete</p>
+      <p>({progress} / {total} files scanned)</p>
+    </div>
+  );
+}
 
 function GalleryPage() {
   const [files, setFiles] = useState([]);
+  const [scanStatus, setScanStatus] = useState(null);
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [showFullSize, setShowFullSize] = useState(false);
   const [sortOrder, setSortOrder] = useState('default');
   
   const observer = useRef();
-  
-  // This callback ref is attached to the last element in the list.
-  // When it becomes visible, we load more images.
+
   const lastImageElementRef = useCallback(node => {
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
@@ -29,21 +41,45 @@ function GalleryPage() {
     try {
       const url = `/api/files${sortOrder === 'random' ? '?sort=random' : ''}`;
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
-      setFiles(data);
+      
+      if (data.status === 'scanning') {
+        setScanStatus(data);
+      } else {
+        setFiles(data);
+        setScanStatus({ status: 'complete' });
+      }
     } catch (error) {
       console.error("Failed to fetch files:", error);
       setFiles([]);
     }
   }, [sortOrder]);
 
+  // Main effect to fetch initial data and poll for scan status
   useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
+    fetchFiles(); // Initial fetch
+    
+    let intervalId;
+    // If the status is scanning, start polling
+    if (scanStatus?.status === 'scanning') {
+      intervalId = setInterval(async () => {
+        const res = await fetch('/api/scan-status');
+        const data = await res.json();
+        setScanStatus(data);
+        if (data.status === 'complete') {
+          fetchFiles(); // Fetch the final file list
+          clearInterval(intervalId);
+        }
+      }, 2000); // Poll every 2 seconds
+    }
+    
+    // Cleanup interval on component unmount
+    return () => clearInterval(intervalId);
+  }, [sortOrder, scanStatus?.status, fetchFiles]);
+
 
   const handleShuffle = () => {
-    setVisibleCount(BATCH_SIZE); // Reset visible count on shuffle
+    setVisibleCount(BATCH_SIZE);
     setSortOrder(prev => (prev === 'random' ? 'default' : 'random'));
   };
 
@@ -54,9 +90,7 @@ function GalleryPage() {
       if (currentIndex !== null && files[currentIndex]?.path === filePath) {
         setCurrentIndex(null);
       }
-    } catch (error) {
-      console.error("Failed to like file:", error);
-    }
+    } catch (error) { console.error("Failed to like file:", error) }
   };
 
   const handleDelete = async (filePath) => {
@@ -67,17 +101,22 @@ function GalleryPage() {
         if (currentIndex !== null && files[currentIndex]?.path === filePath) {
           setCurrentIndex(null);
         }
-      } catch (error) {
-        console.error("Failed to delete file:", error);
-      }
+      } catch (error) { console.error("Failed to delete file:", error) }
     }
   };
   
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
 
-  // We only pass the visible slice of files to the Gallery
   const visibleFiles = files.slice(0, visibleCount);
+
+  // Conditional Rendering based on scan status
+  if (!scanStatus) {
+    return <div>Loading...</div>;
+  }
+  if (scanStatus.status === 'scanning') {
+    return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
+  }
 
   return (
     <>
@@ -104,7 +143,7 @@ function GalleryPage() {
 
       {currentIndex !== null && files.length > 0 && (
         <Viewer
-          files={files} // The viewer still needs the full list to navigate
+          files={files}
           currentIndex={currentIndex}
           onClose={closeViewer}
           onLike={handleLike}

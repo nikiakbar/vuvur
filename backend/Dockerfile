@@ -18,5 +18,6 @@ COPY . .
 # Expose the port the app runs on
 EXPOSE 5000
 
-# Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Command to run the application with an increased timeout (10 minutes)
+# This is NECESSARY for the initial scan of a large library.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "600", "app:app"]

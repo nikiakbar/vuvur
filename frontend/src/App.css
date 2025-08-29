@@ -43,9 +43,9 @@ body.no-scroll {
 }
 
 #root {
-  max-width: 100%; /* Use full width for masonry */
+  max-width: 100%;
   margin: 0 auto;
-  padding: 0; /* Remove padding for edge-to-edge */
+  padding: 0;
   text-align: center;
 }
 
@@ -168,7 +168,7 @@ body.no-scroll {
   gap: 1rem;
   padding: 0.5rem;
   border-radius: 8px;
-  margin: 1rem; /* Add margin since root padding is gone */
+  margin: 1rem;
 }
 
 .shuffle-button {
@@ -185,12 +185,11 @@ body.no-scroll {
   background-color: var(--accent-hover);
 }
 
-/* --- NEW MASONRY GALLERY STYLES --- */
+/* --- MASONRY GALLERY STYLES --- */
 .gallery-masonry-container {
   column-count: 2;
   column-gap: 0;
 }
-/* Responsive columns */
 @media (min-width: 768px) {
   .gallery-masonry-container { column-count: 3; }
 }
@@ -205,14 +204,14 @@ body.no-scroll {
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  break-inside: avoid; /* Prevents images from breaking across columns */
+  break-inside: avoid;
   width: 100%;
 }
 
 .gallery-item img {
   width: 100%;
-  height: auto; /* Let the image's aspect ratio determine the height */
-  display: block; /* Removes bottom space under image */
+  height: auto;
+  display: block;
   transition: opacity 0.3s ease;
 }
 
@@ -279,6 +278,7 @@ body.no-scroll {
   display: flex;
   justify-content: center;
   align-items: center;
+  overflow: hidden;
 }
 
 .viewer-image-container img {
@@ -286,6 +286,13 @@ body.no-scroll {
   max-height: 100vh;
   object-fit: contain;
   border-radius: 4px;
+  transition: transform 0.3s ease;
+  cursor: zoom-in;
+}
+
+.viewer-image-container.zoomed img {
+  transform: scale(2.5);
+  cursor: zoom-out;
 }
 
 .slide-info {
@@ -386,6 +393,24 @@ body.no-scroll {
     color: var(--text-color);
     font-size: 1.5rem;
     z-index: 2001;
+}
+.loading-spinner {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  z-index: 2002;
+}
+@keyframes spin {
+  to {
+    transform: translateX(-50%) rotate(360deg);
+  }
 }
 
 /* --- EXIF DISPLAY STYLES --- */
