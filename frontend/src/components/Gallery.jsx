@@ -1,9 +1,12 @@
 import React from 'react';
+import LazyImage from './LazyImage'; // Import the new component
 
 const Gallery = ({ files, onImageClick, lastImageRef }) => {
+
   if (!files || files.length === 0) {
     return <p>No media found. Check your mounted directories.</p>;
   }
+
   return (
     <div className="gallery-masonry-container">
       {files.map((file, index) => {
@@ -15,7 +18,10 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
             className="gallery-item"
             onClick={() => onImageClick(index)}
           >
-            <img src={`/api/thumbnail/${encodeURIComponent(file.path)}`} alt={file.path} loading="lazy" />
+            <LazyImage 
+              src={`/api/thumbnail/${encodeURIComponent(file.path)}`} 
+              alt={file.path} 
+            />
             {file.type === 'video' && <div className="media-type-overlay">▶</div>}
             <div className="image-dimension-overlay">
               {file.width > 0 ? `${file.width} x ${file.height}` : 'Video'}
@@ -26,4 +32,5 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
     </div>
   );
 };
-export default Gallery; 
+
+export default Gallery;

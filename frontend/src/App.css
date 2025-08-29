@@ -443,3 +443,26 @@ body.no-scroll {
   font-size: 0.75rem;
   line-height: 1.5;
 }
+
+/* --- NEW LAZY IMAGE STYLES --- */
+.lazy-image {
+  /* Start with a transparent background */
+  opacity: 0;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.lazy-image.loaded {
+  /* Fade in the image once it's loaded */
+  opacity: 1;
+}
+
+/* Update the gallery-item img selector to target the new component */
+.gallery-item .lazy-image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.gallery-item:hover .lazy-image {
+  opacity: 0.8;
+}
