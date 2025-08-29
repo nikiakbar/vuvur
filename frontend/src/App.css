@@ -243,7 +243,6 @@ body.no-scroll {
   width: 100%;
   height: auto;
   display: block;
-  transition: opacity 0.3s ease;
 }
 .image-dimension-overlay {
   position: absolute;
@@ -260,7 +259,7 @@ body.no-scroll {
   pointer-events: none;
 }
 .gallery-item:hover .image-dimension-overlay { opacity: 1; }
-.gallery-item:hover img { opacity: 0.8; }
+.gallery-item:hover .lazy-image-placeholder img { opacity: 0.8; }
 
 .media-type-overlay {
   position: absolute;
@@ -272,6 +271,26 @@ body.no-scroll {
   opacity: 0.7;
   text-shadow: 0 0 10px black;
   pointer-events: none;
+}
+
+/* --- UPDATED LAZY IMAGE STYLES --- */
+.lazy-image-placeholder {
+  width: 100%;
+  position: relative;
+  background-color: var(--card-bg); /* Placeholder background */
+}
+.lazy-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.5s ease-in-out;
+}
+.lazy-image.loaded {
+  opacity: 1;
 }
 
 /* --- VIEWER STYLES --- */
@@ -309,8 +328,7 @@ body.no-scroll {
   cursor: zoom-in;
 }
 .viewer-image-container video {
-  max-width: 95vw;
-  max-height: 100vh;
+  max-width: 95vw; max-height: 100vh;
   outline: none;
 }
 .viewer-image-container.zoomed { cursor: grab; }
@@ -442,27 +460,4 @@ body.no-scroll {
   border-radius: 1rem;
   font-size: 0.75rem;
   line-height: 1.5;
-}
-
-/* --- NEW LAZY IMAGE STYLES --- */
-.lazy-image {
-  /* Start with a transparent background */
-  opacity: 0;
-  transition: opacity 0.5s ease-in-out;
-}
-
-.lazy-image.loaded {
-  /* Fade in the image once it's loaded */
-  opacity: 1;
-}
-
-/* Update the gallery-item img selector to target the new component */
-.gallery-item .lazy-image {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-.gallery-item:hover .lazy-image {
-  opacity: 0.8;
 }

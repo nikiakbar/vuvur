@@ -1,5 +1,5 @@
 import React from 'react';
-import LazyImage from './LazyImage'; // Import the new component
+import LazyImage from './LazyImage';
 
 const Gallery = ({ files, onImageClick, lastImageRef }) => {
 
@@ -20,7 +20,9 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
           >
             <LazyImage 
               src={`/api/thumbnail/${encodeURIComponent(file.path)}`} 
-              alt={file.path} 
+              alt={file.path}
+              width={file.width}
+              height={file.height}
             />
             {file.type === 'video' && <div className="media-type-overlay">▶</div>}
             <div className="image-dimension-overlay">
