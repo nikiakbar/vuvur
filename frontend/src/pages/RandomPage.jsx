@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import ImageSlide from '../components/ImageSlide'; // Import the new component
+import MediaSlide from '../components/MediaSlide'; // Import MediaSlide
 
 function RandomPage() {
   const [files, setFiles] = useState([]);
@@ -38,33 +38,24 @@ function RandomPage() {
   useEffect(() => {
     document.body.classList.add('no-scroll');
     loadNextImage();
-    return () => {
-      document.body.classList.remove('no-scroll');
-    };
+    return () => { document.body.classList.remove('no-scroll') };
   }, []);
 
   if (files.length === 0 && isLoading) {
     return <div className="loading-fullscreen">Loading...</div>;
   }
-
   if (files.length === 0 && !isLoading) {
-    return <div className="loading-fullscreen">No images found.</div>;
+    return <div className="loading-fullscreen">No media found.</div>;
   }
 
   return (
     <div className="viewer-overlay standalone-page fullscreen">
-      <Link to="/" className="close-button standalone-close-button" title="Back to Gallery">
-        &times;
-      </Link>
+      <Link to="/" className="close-button standalone-close-button" title="Back to Gallery">&times;</Link>
       {files.map((file, index) => {
         const isLastElement = index === files.length - 1;
         return (
-          <div 
-            ref={isLastElement ? lastImageElementRef : null} 
-            key={file.path} 
-            className="viewer-slide"
-          >
-            <ImageSlide file={file} showControls={false} />
+          <div ref={isLastElement ? lastImageElementRef : null} key={file.path} className="viewer-slide">
+            <MediaSlide file={file} showControls={false} />
           </div>
         );
       })}
