@@ -31,7 +31,7 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/media-viewer-api:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:api
 
       # Step 5: Build and push the frontend image
       - name: Build and push frontend image
@@ -40,4 +40,4 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/media-viewer-portal:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:portal
