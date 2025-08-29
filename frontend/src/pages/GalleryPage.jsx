@@ -2,9 +2,25 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
 
-function GalleryPage({ batchSize }) { // Receive batchSize as a prop
+const BATCH_SIZE = 50;
+
+function ScanningDisplay({ progress, total }) {
+  // ... (This sub-component remains unchanged)
+  const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
+  return (
+    <div className="scanning-container">
+      <h2>Scanning Library (First-Time Setup)</h2>
+      <p>Please wait, this may take several minutes for a large collection...</p>
+      <progress value={progress} max={total}></progress>
+      <p>{percent}% Complete</p>
+      <p>({progress} / {total} files scanned)</p>
+    </div>
+  );
+}
+
+function GalleryPage({ batchSize }) {
   const [files, setFiles] = useState([]);
-  // Use the batchSize prop for the initial visible count
+  const [scanStatus, setScanStatus] = useState(null);
   const [visibleCount, setVisibleCount] = useState(batchSize);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [showFullSize, setShowFullSize] = useState(false);
@@ -12,16 +28,10 @@ function GalleryPage({ batchSize }) { // Receive batchSize as a prop
   
   const observer = useRef();
 
-  // Reset visible count if the batch size changes from settings
-  useEffect(() => {
-    setVisibleCount(batchSize);
-  }, [batchSize]);
-  
   const lastImageElementRef = useCallback(node => {
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && files.length > visibleCount) {
-        // Use the batchSize prop to load the next batch
         setVisibleCount(prev => prev + batchSize);
       }
     });
@@ -32,18 +42,51 @@ function GalleryPage({ batchSize }) { // Receive batchSize as a prop
     try {
       const url = `/api/files${sortOrder === 'random' ? '?sort=random' : ''}`;
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Network response was not ok');
+      if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
       const data = await response.json();
-      setFiles(data);
+      
+      // THE FIX: Ensure the data from the API is an array before setting state.
+      if (Array.isArray(data)) {
+        setFiles(data);
+        setScanStatus({ status: 'complete' });
+      } else if (data.status === 'scanning') {
+        setScanStatus(data);
+        setFiles([]); // Ensure files is an empty array during scan
+      } else {
+        // If we get an object that isn't a scan status, it's an error.
+        console.error("API did not return an array:", data);
+        setFiles([]); // Fallback to an empty array to prevent crash
+      }
     } catch (error) {
       console.error("Failed to fetch files:", error);
-      setFiles([]);
+      setFiles([]); // Fallback to an empty array on any fetch error
     }
   }, [sortOrder]);
 
+  // Main effect to fetch initial data and poll for scan status
   useEffect(() => {
     fetchFiles();
-  }, [fetchFiles]);
+    
+    let intervalId;
+    if (scanStatus?.status === 'scanning') {
+      intervalId = setInterval(async () => {
+        const res = await fetch('/api/scan-status');
+        const data = await res.json();
+        setScanStatus(data);
+        if (data.status === 'complete') {
+          fetchFiles();
+          clearInterval(intervalId);
+        }
+      }, 2000);
+    }
+    
+    return () => clearInterval(intervalId);
+  }, [sortOrder, scanStatus?.status, fetchFiles]);
+  
+  // ... (The rest of the component remains unchanged) ...
+  useEffect(() => {
+    setVisibleCount(batchSize);
+  }, [batchSize]);
 
   const handleShuffle = () => {
     setVisibleCount(batchSize);
@@ -76,6 +119,13 @@ function GalleryPage({ batchSize }) { // Receive batchSize as a prop
   const closeViewer = () => setCurrentIndex(null);
 
   const visibleFiles = files.slice(0, visibleCount);
+
+  if (!scanStatus) {
+    return <div>Loading...</div>;
+  }
+  if (scanStatus.status === 'scanning') {
+    return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
+  }
 
   return (
     <>
