@@ -1,39 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-// DO NOT import useDebounce anymore.
-
-// --- We moved the useDebounce hook logic directly into this file ---
-function useDebounce(value, delay) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-// --- End of useDebounce hook logic ---
-
-
-function ScanningDisplay({ progress, total }) {
-  const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
-  return (
-    <div className="scanning-container">
-      <h2>Scanning Library...</h2>
-      <p>Please wait, this may take several minutes for a large collection...</p>
-      <progress value={progress} max={total}></progress>
-      <p>{percent}% Complete</p>
-      <p>({progress} / {total} files scanned)</p>
-    </div>
-  );
-}
+import { useDebounce } from '../useDebounce';
+import ScanningDisplay from '../components/ScanningDisplay';
 
 function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
   const [files, setFiles] = useState([]);
@@ -101,7 +70,6 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Effect for polling the scan status
   useEffect(() => {
     let intervalId;
     if (scanStatus?.status === 'scanning') {
@@ -118,20 +86,17 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
     return () => clearInterval(intervalId);
   }, [scanStatus?.status, fetchFiles]);
 
-  // Effect for handling filter/sort changes
   useEffect(() => {
     setPage(1);
     fetchFiles(true);
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, fetchFiles]);
 
-  // Effect for loading next page
   useEffect(() => {
     if (page > 1) {
       fetchFiles(false);
     }
   }, [page, fetchFiles]);
   
-  // Initial data load
   useEffect(() => {
     fetchFiles(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
