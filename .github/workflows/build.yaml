@@ -2,18 +2,30 @@ name: Build and Push Docker Images
 
 on:
   push:
-    # Only run on pushes to main or dev
     branches: [ "main", "dev" ]
   workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
+    # Define the matrix strategy
+    strategy:
+      matrix:
+        include:
+          - service: api
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+            tag_name: api
+          - service: portal
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+            tag_name: portal
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # New step to dynamically create the tag suffix
       - name: Set image tag suffix
         id: set_suffix
         run: |
@@ -32,24 +44,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push backend image
-        # This step will only run if the set_suffix step produced an output
+      # This single step now runs in parallel for each item in the matrix
+      - name: Build and push ${{ matrix.service }} image
         if: steps.set_suffix.outputs.tag_suffix != ''
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
-          # Dynamically sets the tag, e.g., nikiakbar/vuvur:api-main
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:api-${{ steps.set_suffix.outputs.tag_suffix }}
-
-      - name: Build and push frontend image
-        # This step also only runs if the suffix was set
-        if: steps.set_suffix.outputs.tag_suffix != ''
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          # Dynamically sets the tag, e.g., nikiakbar/vuvur:portal-main
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:portal-${{ steps.set_suffix.outputs.tag_suffix }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
