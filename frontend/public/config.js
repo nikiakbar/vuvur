@@ -1,0 +1,4 @@
+window.env = {
+  VITE_RANDOM_PRELOAD_COUNT: "3",
+  VITE_RANDOM_HISTORY_SIZE: "5"
+};

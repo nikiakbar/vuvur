@@ -5,6 +5,7 @@ import json
 import time
 import threading
 import subprocess
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, jsonify, send_from_directory, abort, send_file, request
 from flask_cors import CORS
@@ -14,15 +15,15 @@ from PIL.ExifTags import TAGS
 app = Flask(__name__)
 CORS(app)
 
-# --- NEW PATH CONFIGURATION ---
+# --- NEW PATH & DB CONFIGURATION ---
 IMAGE_DIR = '/mnt/gallery/images'
 VIDEO_DIR = '/mnt/gallery/videos'
 LIKED_DIR = '/mnt/gallery/liked'
-DATA_DIR = '/app/data' # App-specific data like caches
+DATA_DIR = '/app/data'
 
+DB_PATH = os.path.join(DATA_DIR, 'vuvur.db')
 PREVIEW_CACHE_DIR = os.path.join(DATA_DIR, 'cache_preview')
 THUMB_CACHE_DIR = os.path.join(DATA_DIR, 'cache_thumb')
-FILE_LIST_CACHE = os.path.join(DATA_DIR, 'file_list_cache.json')
 
 PREVIEW_MAX_WIDTH, PREVIEW_QUALITY = 800, 90
 THUMB_MAX_WIDTH, THUMB_QUALITY = 250, 80
@@ -34,15 +35,35 @@ SCAN_STATUS = {"scanning": False, "progress": 0, "total": 0}
 for path in [IMAGE_DIR, VIDEO_DIR, LIKED_DIR, DATA_DIR, PREVIEW_CACHE_DIR, THUMB_CACHE_DIR]:
     os.makedirs(path, exist_ok=True)
 
+# --- DATABASE SETUP ---
+def get_db():
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    return db
+
+def init_db():
+    with get_db() as db:
+        db.execute('''
+        CREATE TABLE IF NOT EXISTS media (
+            path TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            width INTEGER,
+            height INTEGER,
+            mod_time REAL NOT NULL,
+            exif_json TEXT
+        )
+        ''')
+        db.execute('CREATE INDEX IF NOT EXISTS idx_mod_time ON media (mod_time)')
+        db.execute('CREATE INDEX IF NOT EXISTS idx_type ON media (type)')
+init_db()
+
 # --- HELPER FUNCTIONS ---
 def get_media_type(filename):
     return 'video' if os.path.splitext(filename)[1].lower() in VIDEO_EXTENSIONS else 'image'
-
 def get_source_dir(media_type):
     return VIDEO_DIR if media_type == 'video' else IMAGE_DIR
 
 def get_exif_for_file(img_path):
-    """Reusable helper to extract serializable EXIF data from an image file."""
     try:
         img = Image.open(img_path)
         exif_data = {}
@@ -55,39 +76,27 @@ def get_exif_for_file(img_path):
                         try: value = value.decode('utf-8', errors='ignore')
                         except: value = repr(value)
                     exif_data[decoded_tag] = value
-        
         if 'parameters' in img.info: exif_data['parameters'] = img.info['parameters']
         elif 'Comment' in exif_data: exif_data['parameters'] = exif_data['Comment']
-        
-        return json.loads(json.dumps(exif_data, default=str))
+        return json.dumps(exif_data, default=str)
     except Exception:
-        return {}
+        return "{}"
 
 # --- BACKGROUND SCANNER ---
 def process_file(full_path):
-    """Worker function to process a single file and extract all metadata."""
     global SCAN_STATUS
     try:
         media_type = get_media_type(full_path)
         source_dir = get_source_dir(media_type)
         relative_path = os.path.relpath(full_path, source_dir).replace('\\', '/')
         mod_time = os.path.getmtime(full_path)
-        width, height, exif = 0, 0, {}
-
+        width, height, exif_json = 0, 0, "{}"
         if media_type == 'image':
             with Image.open(full_path) as img:
                 width, height = img.size
-            exif = get_exif_for_file(full_path)
-        
+            exif_json = get_exif_for_file(full_path)
         SCAN_STATUS["progress"] += 1
-        return {
-            "path": relative_path,
-            "width": width,
-            "height": height,
-            "type": media_type,
-            "mod_time": mod_time,
-            "exif": exif
-        }
+        return (relative_path, media_type, width, height, mod_time, exif_json)
     except Exception:
         SCAN_STATUS["progress"] += 1
         return None
@@ -96,19 +105,28 @@ def scan_and_cache_files():
     global SCAN_STATUS
     if SCAN_STATUS["scanning"]: return
     SCAN_STATUS = {"scanning": True, "progress": 0, "total": 0}
-    print(f"Starting parallel media scan with {MAX_WORKERS} workers...")
-    
+    print(f"Starting parallel media index scan with {MAX_WORKERS} workers...")
     paths = [os.path.join(root, f) for d in [IMAGE_DIR, VIDEO_DIR] for root, _, files in os.walk(d) for f in files]
     SCAN_STATUS["total"] = len(paths)
-
+    media_data = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         results = executor.map(process_file, paths)
-        all_media = [res for res in results if res is not None]
+        media_data = [res for res in results if res is not None]
 
-    with open(FILE_LIST_CACHE, 'w') as f: json.dump(all_media, f)
+    # --- Write to Database ---
+    print(f"Indexing {len(media_data)} items into database...")
+    with get_db() as db:
+        db.execute("DELETE FROM media") # Clear old data
+        db.executemany(
+            "INSERT OR REPLACE INTO media (path, type, width, height, mod_time, exif_json) VALUES (?, ?, ?, ?, ?, ?)",
+            media_data
+        )
+        db.commit()
+    
     SCAN_STATUS = {"scanning": False, "progress": SCAN_STATUS["total"], "total": SCAN_STATUS["total"]}
-    print(f"Scan complete. Indexed {len(all_media)} media files.")
+    print(f"Scan complete. Indexed {len(media_data)} media files.")
 
+# ... (background_scanner_task and mod_time checker are modified to work with DB) ...
 def get_latest_mod_time(directory):
     latest_mod = os.path.getmtime(directory)
     for root, dirs, files in os.walk(directory):
@@ -117,97 +135,130 @@ def get_latest_mod_time(directory):
     return latest_mod
 
 def background_scanner_task():
-    """A persistent background task that periodically checks for updates."""
+    db_mtime = 0
+    if os.path.exists(DB_PATH):
+        db_mtime = os.path.getmtime(DB_PATH)
+
     while True:
         try:
-            if not os.path.exists(FILE_LIST_CACHE):
-                print("Cache not found. Starting initial scan.")
+            img_mod_time = get_latest_mod_time(IMAGE_DIR)
+            vid_mod_time = get_latest_mod_time(VIDEO_DIR)
+            source_mod_time = max(img_mod_time, vid_mod_time)
+            if source_mod_time > db_mtime:
                 scan_and_cache_files()
-            else:
-                cache_mod_time = os.path.getmtime(FILE_LIST_CACHE)
-                img_mod_time = get_latest_mod_time(IMAGE_DIR)
-                vid_mod_time = get_latest_mod_time(VIDEO_DIR)
-                source_mod_time = max(img_mod_time, vid_mod_time)
-                if source_mod_time > cache_mod_time:
-                    print("Source directory has been modified. Re-scanning...")
-                    scan_and_cache_files()
-                else:
-                    print("No changes detected. Sleeping.")
+                db_mtime = time.time()
         except Exception as e:
             print(f"Error in background scanner: {e}")
-        
         time.sleep(SCAN_INTERVAL_SECONDS)
-
-def get_files_from_cache():
-    if not os.path.exists(FILE_LIST_CACHE): return None
-    with open(FILE_LIST_CACHE, 'r') as f: return json.load(f)
 
 # --- API ENDPOINTS ---
 @app.route('/api/files')
 def list_files():
-    """Returns file list based on query parameters for filtering and sorting."""
-    files_data = get_files_from_cache()
-    if files_data is None:
+    if not os.path.exists(DB_PATH) or (SCAN_STATUS["scanning"] and SCAN_STATUS["progress"] == 0):
         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
-
-    query = request.args.get('q', '').lower()
-    exif_query = request.args.get('exif_q', '').lower()
     
-    filtered_list = files_data
-    
-    if query:
-        filtered_list = [f for f in filtered_list if query in f['path'].lower()]
-    
-    if exif_query:
-        filtered_list = [
-            f for f in filtered_list 
-            if exif_query in json.dumps(f.get('exif', {})).lower()
-        ]
+    try:
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 50))
+        offset = (page - 1) * limit
 
-    sort_by = request.args.get('sort', 'random') # Default sort is now random
+        sort_by = request.args.get('sort', 'random')
+        query_q = request.args.get('q', '').lower()
+        query_exif = request.args.get('exif_q', '').lower()
 
-    if sort_by == 'random':
-        random.shuffle(filtered_list)
-    elif sort_by == 'date_desc':
-        filtered_list.sort(key=lambda x: x['mod_time'], reverse=True)
-    elif sort_by == 'date_asc':
-        filtered_list.sort(key=lambda x: x['mod_time'])
-    elif sort_by == 'file_asc':
-        filtered_list.sort(key=lambda x: x['path'])
-    elif sort_by == 'file_desc':
-        filtered_list.sort(key=lambda x: x['path'], reverse=True)
+        # Build Query
+        params = []
+        sql_query = "SELECT path, type, width, height FROM media"
+        where_clauses = []
         
-    return jsonify(filtered_list)
+        if query_q:
+            where_clauses.append("path LIKE ?")
+            params.append(f"%{query_q}%")
+        if query_exif:
+            where_clauses.append("exif_json LIKE ?")
+            params.append(f"%{query_exif}%")
 
-@app.route('/api/scan-status')
-def get_scan_status():
-    if not SCAN_STATUS["scanning"] and os.path.exists(FILE_LIST_CACHE): return jsonify({"status": "complete"})
-    return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
+        if where_clauses:
+            sql_query += " WHERE " + " AND ".join(where_clauses)
+
+        # Count total results
+        with get_db() as db:
+            total_count = db.execute(f"SELECT COUNT(1) FROM ({sql_query})", params).fetchone()[0]
+        
+        # Add Sorting
+        sort_map = {
+            'date_desc': 'mod_time DESC',
+            'date_asc': 'mod_time ASC',
+            'file_asc': 'path ASC',
+            'file_desc': 'path DESC',
+            'random': 'RANDOM()',
+        }
+        order_by = sort_map.get(sort_by, 'RANDOM()')
+        sql_query += f" ORDER BY {order_by}"
+        
+        # Add Pagination
+        sql_query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        with get_db() as db:
+            results = db.execute(sql_query, params).fetchall()
+            items = [dict(row) for row in results]
+        
+        return jsonify({
+            "total_items": total_count,
+            "page": page,
+            "total_pages": (total_count // limit) + 1,
+            "items": items
+        })
+    except sqlite3.OperationalError as e:
+         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/files/random')
 def random_files():
     count = int(request.args.get('count', 1))
-    all_files = get_files_from_cache()
-    if not all_files: return jsonify([])
-    count = min(count, len(all_files))
-    return jsonify(random.sample(all_files, k=count))
+    if not os.path.exists(DB_PATH): return jsonify([])
+    try:
+        with get_db() as db:
+            # RANDOM() is efficient in SQLite
+            results = db.execute("SELECT path, type, width, height, exif_json FROM media ORDER BY RANDOM() LIMIT ?", (count,)).fetchall()
+            items = []
+            for row in results:
+                item = dict(row)
+                item['exif'] = json.loads(item.pop('exif_json', '{}'))
+                items.append(item)
+        return jsonify(items)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/scan-status')
+def get_scan_status():
+    if not SCAN_STATUS["scanning"] and os.path.exists(DB_PATH): return jsonify({"status": "complete"})
+    return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
+
+# ... (The rest of the app endpoints are unchanged, but they rely on helper funcs we defined)
+@app.route('/api/thumbnail/<path:filename>')
+def serve_thumbnail(filename):
+    return generate_and_serve_cached_media(filename, THUMB_CACHE_DIR, THUMB_MAX_WIDTH, THUMB_QUALITY)
+@app.route('/api/preview/<path:filename>')
+def serve_preview_image(filename):
+    return generate_and_serve_cached_media(filename, PREVIEW_CACHE_DIR, PREVIEW_MAX_WIDTH, PREVIEW_QUALITY)
 
 def generate_and_serve_cached_media(filename, cache_dir, max_width, quality):
     cache_path = os.path.join(cache_dir, filename)
     if os.path.exists(cache_path): return send_from_directory(cache_dir, filename)
-
     media_type = get_media_type(filename)
     source_dir = get_source_dir(media_type)
     source_path = os.path.join(source_dir, filename)
     if not os.path.exists(source_path): abort(404)
-    
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     try:
         if media_type == 'image':
             with Image.open(source_path) as img:
                 if img.size[0] > max_width:
-                    w_percent = (max_width / float(img.size[0]))
-                    h_size = int((float(img.size[1]) * float(w_percent)))
+                    w_percent = (max_width / float(img.size[0])); h_size = int((float(img.size[1]) * float(w_percent)))
                     img = img.resize((max_width, h_size), Image.Resampling.LANCZOS)
                 if img.mode in ("RGBA", "P"): img = img.convert("RGB")
                 img.save(cache_path, 'JPEG', quality=quality)
@@ -216,19 +267,9 @@ def generate_and_serve_cached_media(filename, cache_dir, max_width, quality):
                 'ffmpeg', '-i', source_path, '-ss', '00:00:01.000', '-vframes', '1',
                 '-vf', f'scale={max_width}:-1', cache_path
             ], check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-        
         return send_from_directory(cache_dir, filename)
     except Exception as e:
-        print(f"Error generating thumbnail for {filename}: {e}")
-        abort(500)
-
-@app.route('/api/preview/<path:filename>')
-def serve_preview_image(filename):
-    return generate_and_serve_cached_media(filename, PREVIEW_CACHE_DIR, PREVIEW_MAX_WIDTH, PREVIEW_QUALITY)
-
-@app.route('/api/thumbnail/<path:filename>')
-def serve_thumbnail(filename):
-    return generate_and_serve_cached_media(filename, THUMB_CACHE_DIR, THUMB_MAX_WIDTH, THUMB_QUALITY)
+        print(f"Error generating thumbnail for {filename}: {e}"); abort(500)
 
 @app.route('/api/view/all/<path:filename>')
 def serve_full_file(filename):
@@ -252,7 +293,7 @@ def delete_file(filename):
     if os.path.exists(file_path):
         os.remove(file_path)
         try:
-            dir_path = os.path.dirname(file_path)
+            dir_path = os.path.dirname(file_path);
             if not os.listdir(dir_path): os.rmdir(dir_path)
         except OSError: pass
         return jsonify({"message": f"'{filename}' deleted."})
@@ -260,14 +301,14 @@ def delete_file(filename):
 
 @app.route('/api/cache/cleanup', methods=['POST'])
 def cleanup_cache():
-    if os.path.exists(FILE_LIST_CACHE): os.remove(FILE_LIST_CACHE)
+    if os.path.exists(DB_PATH): os.remove(DB_PATH)
     for cache_dir in [PREVIEW_CACHE_DIR, THUMB_CACHE_DIR]:
-        if os.path.exists(cache_dir): shutil.rmtree(cache_dir)
-        os.makedirs(cache_dir)
+        if os.path.exists(cache_dir): shutil.rmtree(cache_dir); os.makedirs(cache_dir)
     if not SCAN_STATUS["scanning"]:
         threading.Thread(target=scan_and_cache_files, daemon=True).start()
-    return jsonify({"message": "All caches cleared. A new library scan has started."})
+    return jsonify({"message": "Database and all caches cleared. A new library scan has started."})
 
+# --- START BACKGROUND SCANNER ---
 scanner_thread = threading.Thread(target=background_scanner_task, daemon=True)
 scanner_thread.start()
 

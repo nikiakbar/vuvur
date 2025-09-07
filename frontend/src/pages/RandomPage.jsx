@@ -2,69 +2,89 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import MediaSlide from '../components/MediaSlide';
 
+// Read values from the global window.env object, with defaults
+const PRELOAD_COUNT = parseInt(window.env.VITE_RANDOM_PRELOAD_COUNT || 3);
+const HISTORY_SIZE = parseInt(window.env.VITE_RANDOM_HISTORY_SIZE || 5);
+const MAX_QUEUE_SIZE = HISTORY_SIZE + 1 + PRELOAD_COUNT;
+
 function RandomPage({ showFullSize }) {
-  const [files, setFiles] = useState([]);
+  const [filesQueue, setFilesQueue] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const observer = useRef();
 
-  const loadNextImage = useCallback(async () => {
-    if (isLoading) return;
+  const fetchRandomFiles = useCallback(async (count) => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/files/random?count=1');
+      const response = await fetch(`/api/files/random?count=${count}`);
       if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
       if (data.length > 0) {
-        setFiles(prevFiles => [...prevFiles, ...data]);
+        setFilesQueue(prevFiles => {
+          const newFiles = [...prevFiles, ...data];
+          // Trim the history if the queue is now too long
+          if (newFiles.length > MAX_QUEUE_SIZE) {
+            return newFiles.slice(newFiles.length - MAX_QUEUE_SIZE);
+          }
+          return newFiles;
+        });
+        // Adjust current index if we trimmed the history
+        if (filesQueue.length > MAX_QUEUE_SIZE) {
+          setCurrentIndex(prev => Math.max(0, prev - (filesQueue.length - MAX_QUEUE_SIZE)));
+        }
       }
     } catch (error) {
       console.error("Failed to fetch random file:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
-  
-  const lastImageElementRef = useCallback(node => {
-    if (isLoading) return;
+  }, [filesQueue.length]);
+
+  useEffect(() => {
+    const slideNodes = document.querySelectorAll('.viewer-slide');
+    if (slideNodes.length === 0) return;
+    const preloadTriggerIndex = Math.max(0, filesQueue.length - PRELOAD_COUNT + 1);
+    const nodeToObserve = slideNodes[preloadTriggerIndex];
+
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) {
-        loadNextImage();
+      if (entries[0].isIntersecting && !isLoading) {
+        fetchRandomFiles(PRELOAD_COUNT);
       }
     });
-    if (node) observer.current.observe(node);
-  }, [isLoading, loadNextImage]);
+    if (nodeToObserve) {
+      observer.current.observe(nodeToObserve);
+    }
+    return () => { if (nodeToObserve) observer.current.unobserve(nodeToObserve) };
+  }, [filesQueue.length, isLoading, fetchRandomFiles]);
 
   useEffect(() => {
     document.body.classList.add('no-scroll');
-    loadNextImage();
+    fetchRandomFiles(1 + PRELOAD_COUNT);
     return () => { document.body.classList.remove('no-scroll') };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, []); 
 
-  if (files.length === 0 && isLoading) {
+  if (filesQueue.length === 0 && isLoading) {
     return <div className="loading-fullscreen">Loading...</div>;
   }
-  if (files.length === 0 && !isLoading) {
+  if (filesQueue.length === 0 && !isLoading) {
     return <div className="loading-fullscreen">No media found.</div>;
   }
 
   return (
     <div className="viewer-overlay standalone-page fullscreen">
       <Link to="/" className="close-button standalone-close-button" title="Back to Gallery">&times;</Link>
-      {files.map((file, index) => {
-        const isLastElement = index === files.length - 1;
-        return (
-          <div ref={isLastElement ? lastImageElementRef : null} key={file.path} className="viewer-slide">
-            <MediaSlide 
-              file={file} 
-              showControls={false} 
-              showFullSize={showFullSize} 
-            />
-          </div>
-        );
-      })}
-      {isLoading && files.length > 0 && <div className="loading-spinner"></div>}
+      {filesQueue.map((file, index) => (
+        <div key={file.path} className="viewer-slide">
+          <MediaSlide 
+            file={file} 
+            showControls={false} 
+            showFullSize={true} 
+          />
+        </div>
+      ))}
+      {isLoading && <div className="loading-spinner"></div>}
     </div>
   );
 }
