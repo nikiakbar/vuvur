@@ -1,15 +1,33 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-import { useDebounce } from '../useDebounce';
+// DO NOT import useDebounce anymore.
+
+// --- We moved the useDebounce hook logic directly into this file ---
+function useDebounce(value, delay) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+// --- End of useDebounce hook logic ---
+
 
 function ScanningDisplay({ progress, total }) {
-  // ... (unchanged) ...
   const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
   return (
     <div className="scanning-container">
       <h2>Scanning Library...</h2>
-      <p>Please wait...</p>
+      <p>Please wait, this may take several minutes for a large collection...</p>
       <progress value={progress} max={total}></progress>
       <p>{percent}% Complete</p>
       <p>({progress} / {total} files scanned)</p>
@@ -17,21 +35,23 @@ function ScanningDisplay({ progress, total }) {
   );
 }
 
-// Receive zoomLevel prop from App
 function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
   const [files, setFiles] = useState([]);
   const [scanStatus, setScanStatus] = useState(null);
   const [visibleCount, setVisibleCount] = useState(batchSize);
   const [currentIndex, setCurrentIndex] = useState(null);
+  
   const [sortBy, setSortBy] = useState('random');
   const [filenameQuery, setFilenameQuery] = useState('');
   const [exifQuery, setExifQuery] = useState('');
 
-  // ... (all other hooks and handlers remain the same) ...
   const debouncedFilenameQuery = useDebounce(filenameQuery, 500);
   const debouncedExifQuery = useDebounce(exifQuery, 500);
+  
   const observer = useRef();
+
   useEffect(() => { setVisibleCount(batchSize) }, [batchSize]);
+  
   const lastImageElementRef = useCallback(node => {
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
@@ -41,6 +61,7 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
     });
     if (node) observer.current.observe(node);
   }, [files.length, visibleCount, batchSize]);
+
   const fetchFiles = useCallback(async (isNewSearch = false) => {
     setIsLoading(true);
     try {
@@ -55,7 +76,8 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
       const url = `/api/files?${params.toString()}`;
       const response = await fetch(url);
       const data = await response.json();
-      if (Array.isArray(data.items)) {
+      
+      if (data.items && Array.isArray(data.items)) {
         setFiles(prevFiles => (isNewSearch ? data.items : [...prevFiles, ...data.items]));
         setTotalPages(data.total_pages);
         setScanStatus({ status: 'complete' });
@@ -72,17 +94,14 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
     } finally {
       setIsLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, page, batchSize]);
-  useEffect(() => {
-    if (scanStatus?.status !== 'scanning') {
-        fetchFiles(true);
-    }
-  }, [sortBy, debouncedFilenameQuery, debouncedExifQuery]);
-  useEffect(() => {
-    if (page > 1) {
-        fetchFiles(false);
-    }
-  }, [page]);
+
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Effect for polling the scan status
   useEffect(() => {
     let intervalId;
     if (scanStatus?.status === 'scanning') {
@@ -98,19 +117,47 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
     }
     return () => clearInterval(intervalId);
   }, [scanStatus?.status, fetchFiles]);
+
+  // Effect for handling filter/sort changes
+  useEffect(() => {
+    setPage(1);
+    fetchFiles(true);
+  }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, fetchFiles]);
+
+  // Effect for loading next page
+  useEffect(() => {
+    if (page > 1) {
+      fetchFiles(false);
+    }
+  }, [page, fetchFiles]);
+  
+  // Initial data load
   useEffect(() => {
     fetchFiles(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const handleLike = async (filePath) => { /* ... */ };
-  const handleDelete = async (filePath) => { /* ... */ };
+  
+  const handleLike = async (filePath) => {
+    await fetch(`/api/like/${filePath}`, { method: 'POST' });
+    setFiles(files.filter(f => f.path !== filePath));
+    if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
+  };
+  const handleDelete = async (filePath) => {
+    if (window.confirm(`Are you sure you want to delete ${filePath}?`)) {
+      await fetch(`/api/delete/${filePath}`, { method: 'DELETE' });
+      setFiles(files.filter(f => f.path !== filePath));
+      if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
+    }
+  };
+  
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
+
   const visibleFiles = files.slice(0, visibleCount);
-  if (!scanStatus) { return <div>Loading...</div>; }
+
+  if (!scanStatus) {
+    return <div>Loading...</div>;
+  }
   if (scanStatus.status === 'scanning') {
     return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
   }
@@ -118,8 +165,20 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
   return (
     <>
       <div className="controls-bar settings">
-        <input type="text" placeholder="Filter by filename..." className="filter-input" value={filenameQuery} onChange={(e) => setFilenameQuery(e.target.value)} />
-        <input type="text" placeholder="Search prompts/EXIF..." className="filter-input" value={exifQuery} onChange={(e) => setExifQuery(e.target.value)} />
+        <input 
+          type="text"
+          placeholder="Filter by filename..."
+          className="filter-input"
+          value={filenameQuery}
+          onChange={(e) => setFilenameQuery(e.target.value)}
+        />
+        <input 
+          type="text"
+          placeholder="Search prompts/EXIF..."
+          className="filter-input"
+          value={exifQuery}
+          onChange={(e) => setExifQuery(e.target.value)}
+        />
         <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
           <option value="random">Random</option>
           <option value="date_desc">Date (Newest First)</option>
@@ -128,7 +187,12 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
           <option value="file_desc">Filename (Z-A)</option>
         </select>
         <div className="setting-item">
-            <input type="checkbox" id="full-size-toggle" checked={showFullSize} onChange={(e) => setShowFullSize(e.target.checked)} />
+            <input
+              type="checkbox"
+              id="full-size-toggle"
+              checked={showFullSize} 
+              onChange={(e) => setShowFullSize(e.target.checked)}
+            />
             <label htmlFor="full-size-toggle">Show Full-Size</label>
         </div>
       </div>
@@ -138,6 +202,7 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
         onImageClick={openViewer} 
         lastImageRef={lastImageElementRef}
       />
+      {isLoading && page > 1 && <div className="loading-spinner"></div>}
 
       {currentIndex !== null && files.length > 0 && (
         <Viewer
@@ -148,7 +213,7 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
           onDelete={handleDelete}
           showFullSize={showFullSize} 
           setCurrentIndex={setCurrentIndex}
-          zoomLevel={zoomLevel} /* Pass the prop down */
+          zoomLevel={zoomLevel}
         />
       )}
     </>
