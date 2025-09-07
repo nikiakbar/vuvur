@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-import { useDebounce } from '../useDebounce';
+import useDebounce from '../useDebounce'; // Changed this import (no curly braces)
 import ScanningDisplay from '../components/ScanningDisplay';
 
 function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
