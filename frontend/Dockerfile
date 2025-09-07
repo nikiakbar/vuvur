@@ -8,16 +8,11 @@ RUN npm run build
 
 # Stage 2: Serve the application using Nginx
 FROM nginx:1.25-alpine
-# Copy the built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
-# Copy the Nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-# Copy the new dynamic entrypoint script
+# Copy and configure the new entrypoint
 COPY entrypoint.sh /
-# Make the script executable
 RUN chmod +x /entrypoint.sh
 
-# Set the new script as the entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
-# The default Nginx command will be passed as the argument ("$@")
 CMD ["nginx", "-g", "daemon off;"]
