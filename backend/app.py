@@ -20,14 +20,13 @@ IMAGE_DIR = '/mnt/gallery/images'
 VIDEO_DIR = '/mnt/gallery/videos'
 LIKED_DIR = '/mnt/gallery/liked'
 DATA_DIR = '/app/data'
-
 DB_PATH = os.path.join(DATA_DIR, 'vuvur.db')
 PREVIEW_CACHE_DIR = os.path.join(DATA_DIR, 'cache_preview')
 THUMB_CACHE_DIR = os.path.join(DATA_DIR, 'cache_thumb')
+SETTINGS_PATH = os.path.join(DATA_DIR, 'settings.json')
 
 PREVIEW_MAX_WIDTH, PREVIEW_QUALITY = 800, 90
 THUMB_MAX_WIDTH, THUMB_QUALITY = 250, 80
-SCAN_INTERVAL_SECONDS = 300
 MAX_WORKERS = os.cpu_count() or 4
 VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.mkv', '.avi'}
 SCAN_STATUS = {"scanning": False, "progress": 0, "total": 0}
@@ -37,22 +36,15 @@ for path in [IMAGE_DIR, VIDEO_DIR, LIKED_DIR, DATA_DIR, PREVIEW_CACHE_DIR, THUMB
 
 # --- DATABASE SETUP ---
 def get_db():
-    db = sqlite3.connect(DB_PATH)
-    db.row_factory = sqlite3.Row
-    return db
+    db = sqlite3.connect(DB_PATH); db.row_factory = sqlite3.Row; return db
 
 def init_db():
     with get_db() as db:
         db.execute('''
         CREATE TABLE IF NOT EXISTS media (
-            path TEXT PRIMARY KEY,
-            type TEXT NOT NULL,
-            width INTEGER,
-            height INTEGER,
-            mod_time REAL NOT NULL,
-            exif_json TEXT
-        )
-        ''')
+            path TEXT PRIMARY KEY, type TEXT NOT NULL, width INTEGER,
+            height INTEGER, mod_time REAL NOT NULL, exif_json TEXT
+        )''')
         db.execute('CREATE INDEX IF NOT EXISTS idx_mod_time ON media (mod_time)')
         db.execute('CREATE INDEX IF NOT EXISTS idx_type ON media (type)')
         db.commit()
@@ -106,25 +98,18 @@ def scan_and_cache_files():
     if SCAN_STATUS["scanning"]: return
     SCAN_STATUS = {"scanning": True, "progress": 0, "total": 0}
     print(f"Starting parallel media index scan with {MAX_WORKERS} workers...")
-    
-    init_db() 
-
+    init_db()
     paths = [os.path.join(root, f) for d in [IMAGE_DIR, VIDEO_DIR] for root, _, files in os.walk(d) for f in files]
     SCAN_STATUS["total"] = len(paths)
     media_data = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         results = executor.map(process_file, paths)
         media_data = [res for res in results if res is not None]
-
     print(f"Indexing {len(media_data)} items into database...")
     with get_db() as db:
         db.execute("DELETE FROM media") 
-        db.executemany(
-            "INSERT OR REPLACE INTO media (path, type, width, height, mod_time, exif_json) VALUES (?, ?, ?, ?, ?, ?)",
-            media_data
-        )
+        db.executemany("INSERT OR REPLACE INTO media (path, type, width, height, mod_time, exif_json) VALUES (?, ?, ?, ?, ?, ?)", media_data)
         db.commit()
-    
     SCAN_STATUS = {"scanning": False, "progress": SCAN_STATUS["total"], "total": SCAN_STATUS["total"]}
     print(f"Scan complete. Indexed {len(media_data)} media files.")
 
@@ -136,74 +121,65 @@ def get_latest_mod_time(directory):
     return latest_mod
 
 def background_scanner_task():
+    """Persistent background task, updated with safer logic."""
     while True:
+        scan_needed = False
         try:
-            init_db() 
-            db_populated = False
-            if os.path.exists(DB_PATH):
-                 with get_db() as db:
-                    try:
-                        count = db.execute("SELECT COUNT(1) FROM media").fetchone()[0]
-                        if count > 0:
-                            db_populated = True
-                    except sqlite3.OperationalError:
-                        db_populated = False 
-
-            if not db_populated:
-                print("Database is empty or missing. Starting initial scan.")
+            init_db()
+            if not os.path.exists(DB_PATH):
+                scan_needed = True
+            else:
+                with get_db() as db:
+                    count = db.execute("SELECT COUNT(1) FROM media").fetchone()[0]
+                    if count == 0:
+                        scan_needed = True
+                    else:
+                        db_mod_time = os.path.getmtime(DB_PATH)
+                        source_mod_time = max(get_latest_mod_time(IMAGE_DIR), get_latest_mod_time(VIDEO_DIR))
+                        if source_mod_time > db_mod_time:
+                            scan_needed = True
+            
+            if scan_needed:
+                print("Change detected or DB empty. Starting scan.")
                 scan_and_cache_files()
             else:
-                db_mod_time = os.path.getmtime(DB_PATH) 
-                img_mod_time = get_latest_mod_time(IMAGE_DIR)
-                vid_mod_time = get_latest_mod_time(VIDEO_DIR)
-                source_mod_time = max(img_mod_time, vid_mod_time)
-                
-                if source_mod_time > db_mod_time:
-                    print("Source directory has been modified. Re-scanning...")
-                    scan_and_cache_files()
-                else:
-                    settings = load_settings()
-                    scan_interval = settings.get('scan_interval', 3600)
-                    print(f"No changes detected. Sleeping for {scan_interval} seconds.")
-                    time.sleep(scan_interval)
+                print("No changes detected.")
+        
         except Exception as e:
             print(f"Error in background scanner: {e}")
-            time.sleep(60) # Wait 1 min on error
-        
-        settings = load_settings()
-        scan_interval = settings.get('scan_interval', 3600)
-        if scan_interval <= 0:
-             time.sleep(300) # Sleep for 5 mins even if disabled, just to reduce CPU usage
+
+        try:
+            settings = load_settings()
+            scan_interval = settings.get('scan_interval', 3600)
+            if scan_interval <= 0:
+                print("Periodic scanning disabled. Checking again in 5 minutes.")
+                time.sleep(300)
+            else:
+                print(f"Sleeping for {scan_interval} seconds.")
+                time.sleep(scan_interval)
+        except Exception as e:
+            print(f"Error in scanner sleep cycle: {e}")
+            time.sleep(300)
 
 # --- SETTINGS MANAGEMENT ---
-DEFAULT_SETTINGS = {
-    'scan_interval': 3600,
-    'batch_size': 20,
-    'preload_count': 3,
-    'zoom_level': 2.5
-}
+DEFAULT_SETTINGS = {'scan_interval': 3600, 'batch_size': 20, 'preload_count': 3, 'zoom_level': 2.5}
 LOCKED_SETTINGS = set()
 
 def load_settings():
     settings = DEFAULT_SETTINGS.copy()
     if os.path.exists(SETTINGS_PATH):
         try:
-            with open(SETTINGS_PATH, 'r') as f:
-                settings.update(json.load(f))
+            with open(SETTINGS_PATH, 'r') as f: settings.update(json.load(f))
         except json.JSONDecodeError: pass 
     
     env_scan = os.environ.get('SCAN_INTERVAL')
-    if env_scan is not None:
-        settings['scan_interval'] = int(env_scan); LOCKED_SETTINGS.add('scan_interval')
+    if env_scan is not None: settings['scan_interval'] = int(env_scan); LOCKED_SETTINGS.add('scan_interval')
     env_batch = os.environ.get('GALLERY_BATCH_SIZE')
-    if env_batch is not None:
-        settings['batch_size'] = int(env_batch); LOCKED_SETTINGS.add('batch_size')
+    if env_batch is not None: settings['batch_size'] = int(env_batch); LOCKED_SETTINGS.add('batch_size')
     env_preload = os.environ.get('RANDOM_PRELOAD_COUNT')
-    if env_preload is not None:
-        settings['preload_count'] = int(env_preload); LOCKED_SETTINGS.add('preload_count')
+    if env_preload is not None: settings['preload_count'] = int(env_preload); LOCKED_SETTINGS.add('preload_count')
     env_zoom = os.environ.get('ZOOM_LEVEL')
-    if env_zoom is not None:
-        settings['zoom_level'] = float(env_zoom); LOCKED_SETTINGS.add('zoom_level')
+    if env_zoom is not None: settings['zoom_level'] = float(env_zoom); LOCKED_SETTINGS.add('zoom_level')
     return settings
 
 def save_settings(new_settings):
@@ -232,7 +208,7 @@ def list_files():
              threading.Thread(target=scan_and_cache_files, daemon=True).start()
         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
     try:
-        init_db() 
+        init_db()
         settings = load_settings()
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', settings.get('batch_size', 20)))
@@ -275,20 +251,15 @@ def random_files():
     count = int(request.args.get('count', 1))
     if not os.path.exists(DB_PATH): return jsonify([])
     try:
-        init_db() 
+        init_db()
         with get_db() as db:
             results = db.execute("SELECT path, type, width, height, mod_time, exif_json FROM media ORDER BY RANDOM() LIMIT ?", (count,)).fetchall()
             items = []
             for row in results:
-                # This logic is now safer
-                exif_string = row['exif_json'] or '{}' # Coalesce NULL to empty JSON string
+                exif_string = row['exif_json'] or '{}'
                 items.append({
-                    "path": row['path'],
-                    "type": row['type'],
-                    "width": row['width'],
-                    "height": row['height'],
-                    "mod_time": row['mod_time'],
-                    "exif": json.loads(exif_string)
+                    "path": row['path'], "type": row['type'], "width": row['width'],
+                    "height": row['height'], "mod_time": row['mod_time'], "exif": json.loads(exif_string)
                 })
         return jsonify(items)
     except Exception as e:

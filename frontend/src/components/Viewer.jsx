@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MediaSlide from './MediaSlide';
-import ExifDisplay from './ExifDisplay'; // Import the new component
-
-// The ExifDisplay component definition has been removed from this file
+import ExifDisplay from './ExifDisplay';
 
 const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, setCurrentIndex, zoomLevel }) => {
   const scrollContainerRef = useRef(null);
@@ -65,7 +63,7 @@ const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, 
             onDelete={onDelete}
             onShowExif={handleShowExif}
             showControls={true}
-            zoomLevel={zoomLevel}
+            zoomLevel={zoomLevel || 2.5} 
           />
         </div>
       ))}

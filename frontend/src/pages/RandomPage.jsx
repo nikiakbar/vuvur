@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import MediaSlide from '../components/MediaSlide';
-import { useSettings } from '../contexts/SettingsContext'; // Import the hook
+import { useSettings } from '../contexts/SettingsContext';
 
 function RandomPage({ showFullSize }) {
-  const { settings } = useSettings(); // Use the global settings
-  const preloadCount = settings.preload_count;
-  const zoomLevel = settings.zoom_level;
+  const { settings } = useSettings();
+  
+  // --- FIX ---
+  // Use optional chaining and defaults in case settings are null
+  const preloadCount = settings?.preload_count || 3;
+  const zoomLevel = settings?.zoom_level || 2.5;
 
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,7 +61,7 @@ function RandomPage({ showFullSize }) {
               file={file} 
               showControls={false} 
               showFullSize={true} 
-              zoomLevel={zoomLevel} // Pass the setting
+              zoomLevel={zoomLevel} 
             />
           </div>
         );

@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-import useDebounce from '../useDebounce';
+import { useDebounce } from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 import { useSettings } from '../contexts/SettingsContext';
 
 function GalleryPage() {
   const { settings } = useSettings();
-  const batchSize = settings.batch_size;
+  
+  // --- FIX ---
+  // Add default values here in case settings are null
+  const batchSize = settings?.batch_size || 20;
+  const zoomLevel = settings?.zoom_level || 2.5;
 
   const [files, setFiles] = useState([]);
   const [scanStatus, setScanStatus] = useState(null);
@@ -181,7 +185,7 @@ function GalleryPage() {
           onDelete={handleDelete}
           showFullSize={showFullSize} 
           setCurrentIndex={setCurrentIndex}
-          zoomLevel={settings.zoom_level}
+          zoomLevel={zoomLevel} 
         />
       )}
     </>
