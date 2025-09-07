@@ -15,7 +15,7 @@ from PIL.ExifTags import TAGS
 app = Flask(__name__)
 CORS(app)
 
-# --- NEW PATH & DB CONFIGURATION ---
+# --- CONFIGURATION ---
 IMAGE_DIR = '/mnt/gallery/images'
 VIDEO_DIR = '/mnt/gallery/videos'
 LIKED_DIR = '/mnt/gallery/liked'
@@ -42,6 +42,7 @@ def get_db():
     return db
 
 def init_db():
+    """Initializes the database schema. Safe to call multiple times."""
     with get_db() as db:
         db.execute('''
         CREATE TABLE IF NOT EXISTS media (
@@ -55,7 +56,7 @@ def init_db():
         ''')
         db.execute('CREATE INDEX IF NOT EXISTS idx_mod_time ON media (mod_time)')
         db.execute('CREATE INDEX IF NOT EXISTS idx_type ON media (type)')
-init_db()
+        db.commit()
 
 # --- HELPER FUNCTIONS ---
 def get_media_type(filename):
@@ -106,6 +107,9 @@ def scan_and_cache_files():
     if SCAN_STATUS["scanning"]: return
     SCAN_STATUS = {"scanning": True, "progress": 0, "total": 0}
     print(f"Starting parallel media index scan with {MAX_WORKERS} workers...")
+    
+    init_db() # Ensure schema exists before scanning
+
     paths = [os.path.join(root, f) for d in [IMAGE_DIR, VIDEO_DIR] for root, _, files in os.walk(d) for f in files]
     SCAN_STATUS["total"] = len(paths)
     media_data = []
@@ -113,9 +117,9 @@ def scan_and_cache_files():
         results = executor.map(process_file, paths)
         media_data = [res for res in results if res is not None]
 
-    # --- Write to Database ---
     print(f"Indexing {len(media_data)} items into database...")
     with get_db() as db:
+        # We already called init_db, so the table is guaranteed to exist
         db.execute("DELETE FROM media") # Clear old data
         db.executemany(
             "INSERT OR REPLACE INTO media (path, type, width, height, mod_time, exif_json) VALUES (?, ?, ?, ?, ?, ?)",
@@ -126,7 +130,6 @@ def scan_and_cache_files():
     SCAN_STATUS = {"scanning": False, "progress": SCAN_STATUS["total"], "total": SCAN_STATUS["total"]}
     print(f"Scan complete. Indexed {len(media_data)} media files.")
 
-# ... (background_scanner_task and mod_time checker are modified to work with DB) ...
 def get_latest_mod_time(directory):
     latest_mod = os.path.getmtime(directory)
     for root, dirs, files in os.walk(directory):
@@ -135,40 +138,48 @@ def get_latest_mod_time(directory):
     return latest_mod
 
 def background_scanner_task():
-    db_mtime = 0
-    if os.path.exists(DB_PATH):
-        db_mtime = os.path.getmtime(DB_PATH)
-
     while True:
         try:
+            init_db() # Ensure DB exists before checking it
+            db_mtime = 0
+            if os.path.exists(DB_PATH):
+                db_mtime = os.path.getmtime(DB_PATH)
+
             img_mod_time = get_latest_mod_time(IMAGE_DIR)
             vid_mod_time = get_latest_mod_time(VIDEO_DIR)
             source_mod_time = max(img_mod_time, vid_mod_time)
+            
             if source_mod_time > db_mtime:
                 scan_and_cache_files()
-                db_mtime = time.time()
         except Exception as e:
             print(f"Error in background scanner: {e}")
         time.sleep(SCAN_INTERVAL_SECONDS)
+
+def get_files_from_db_cache():
+    """Helper to get the cached file list from the DB."""
+    init_db() # Ensure table exists before reading
+    with get_db() as db:
+        return db.execute("SELECT * FROM media").fetchall()
 
 # --- API ENDPOINTS ---
 @app.route('/api/files')
 def list_files():
     if not os.path.exists(DB_PATH) or (SCAN_STATUS["scanning"] and SCAN_STATUS["progress"] == 0):
+        if not SCAN_STATUS["scanning"]:
+             threading.Thread(target=scan_and_cache_files, daemon=True).start()
         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
     
     try:
+        init_db() # Ensure table exists before querying
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 50))
         offset = (page - 1) * limit
-
         sort_by = request.args.get('sort', 'random')
         query_q = request.args.get('q', '').lower()
         query_exif = request.args.get('exif_q', '').lower()
 
-        # Build Query
         params = []
-        sql_query = "SELECT path, type, width, height FROM media"
+        sql_query = "SELECT path, type, width, height, mod_time, exif_json FROM media"
         where_clauses = []
         
         if query_q:
@@ -181,11 +192,10 @@ def list_files():
         if where_clauses:
             sql_query += " WHERE " + " AND ".join(where_clauses)
 
-        # Count total results
         with get_db() as db:
-            total_count = db.execute(f"SELECT COUNT(1) FROM ({sql_query})", params).fetchone()[0]
+            total_count_result = db.execute(f"SELECT COUNT(1) FROM ({sql_query}) AS base_query", params).fetchone()
+            total_count = total_count_result[0] if total_count_result else 0
         
-        # Add Sorting
         sort_map = {
             'date_desc': 'mod_time DESC',
             'date_asc': 'mod_time ASC',
@@ -195,14 +205,16 @@ def list_files():
         }
         order_by = sort_map.get(sort_by, 'RANDOM()')
         sql_query += f" ORDER BY {order_by}"
-        
-        # Add Pagination
         sql_query += " LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         with get_db() as db:
             results = db.execute(sql_query, params).fetchall()
-            items = [dict(row) for row in results]
+            items = []
+            for row in results:
+                item = dict(row)
+                item['exif'] = json.loads(item.pop('exif_json', '{}'))
+                items.append(item)
         
         return jsonify({
             "total_items": total_count,
@@ -210,20 +222,25 @@ def list_files():
             "total_pages": (total_count // limit) + 1,
             "items": items
         })
-    except sqlite3.OperationalError as e:
-         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Error in list_files: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
+
+@app.route('/api/scan-status')
+def get_scan_status():
+    if not SCAN_STATUS["scanning"] and os.path.exists(DB_PATH): 
+        return jsonify({"status": "complete"})
+    return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
 
 @app.route('/api/files/random')
 def random_files():
     count = int(request.args.get('count', 1))
     if not os.path.exists(DB_PATH): return jsonify([])
     try:
+        init_db() # Ensure table exists
         with get_db() as db:
-            # RANDOM() is efficient in SQLite
-            results = db.execute("SELECT path, type, width, height, exif_json FROM media ORDER BY RANDOM() LIMIT ?", (count,)).fetchall()
+            results = db.execute("SELECT path, type, width, height, mod_time, exif_json FROM media ORDER BY RANDOM() LIMIT ?", (count,)).fetchall()
             items = []
             for row in results:
                 item = dict(row)
@@ -233,12 +250,6 @@ def random_files():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/scan-status')
-def get_scan_status():
-    if not SCAN_STATUS["scanning"] and os.path.exists(DB_PATH): return jsonify({"status": "complete"})
-    return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
-
-# ... (The rest of the app endpoints are unchanged, but they rely on helper funcs we defined)
 @app.route('/api/thumbnail/<path:filename>')
 def serve_thumbnail(filename):
     return generate_and_serve_cached_media(filename, THUMB_CACHE_DIR, THUMB_MAX_WIDTH, THUMB_QUALITY)
@@ -308,7 +319,7 @@ def cleanup_cache():
         threading.Thread(target=scan_and_cache_files, daemon=True).start()
     return jsonify({"message": "Database and all caches cleared. A new library scan has started."})
 
-# --- START BACKGROUND SCANNER ---
+# Start the persistent background scanner thread
 scanner_thread = threading.Thread(target=background_scanner_task, daemon=True)
 scanner_thread.start()
 
