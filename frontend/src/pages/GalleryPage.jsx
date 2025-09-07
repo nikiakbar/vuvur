@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-import { useDebounce } from '../useDebounce';
+import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 import { useSettings } from '../contexts/SettingsContext';
 
 function GalleryPage() {
   const { settings } = useSettings();
   
-  // --- FIX ---
-  // Add default values here in case settings are null
   const batchSize = settings?.batch_size || 20;
   const zoomLevel = settings?.zoom_level || 2.5;
 
@@ -151,7 +149,7 @@ function GalleryPage() {
           value={exifQuery}
           onChange={(e) => setExifQuery(e.target.value)}
         />
-        <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+        <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target..value)}>
           <option value="random">Random</option>
           <option value="date_desc">Date (Newest First)</option>
           <option value="date_asc">Date (Oldest First)</option>
@@ -185,7 +183,7 @@ function GalleryPage() {
           onDelete={handleDelete}
           showFullSize={showFullSize} 
           setCurrentIndex={setCurrentIndex}
-          zoomLevel={zoomLevel} 
+          zoomLevel={zoomLevel}
         />
       )}
     </>
