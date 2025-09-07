@@ -14,7 +14,13 @@ services:
       # - ./media/videos:/mnt/gallery/videos
       - /mnt/z/Locals/system/liked:/mnt/gallery/liked
     restart: unless-stopped
-
+    environment:
+      # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.
+      - SCAN_INTERVAL=3600
+      - GALLERY_BATCH_SIZE=20
+      - RANDOM_PRELOAD_COUNT=3
+      - ZOOM_LEVEL=2.0
+      
   portal:
     # build:
     #   context: ./frontend
@@ -25,6 +31,3 @@ services:
     depends_on:
       - api
     restart: unless-stopped
-    environment:
-      - VITE_RANDOM_PRELOAD_COUNT=3
-      - VITE_RANDOM_HISTORY_SIZE=5
