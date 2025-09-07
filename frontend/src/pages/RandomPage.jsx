@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import MediaSlide from '../components/MediaSlide'; // Import MediaSlide
+import MediaSlide from '../components/MediaSlide';
 
-function RandomPage() {
+function RandomPage({ showFullSize }) {
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const observer = useRef();
@@ -39,7 +39,8 @@ function RandomPage() {
     document.body.classList.add('no-scroll');
     loadNextImage();
     return () => { document.body.classList.remove('no-scroll') };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   if (files.length === 0 && isLoading) {
     return <div className="loading-fullscreen">Loading...</div>;
@@ -55,7 +56,11 @@ function RandomPage() {
         const isLastElement = index === files.length - 1;
         return (
           <div ref={isLastElement ? lastImageElementRef : null} key={file.path} className="viewer-slide">
-            <MediaSlide file={file} showControls={false} />
+            <MediaSlide 
+              file={file} 
+              showControls={false} 
+              showFullSize={showFullSize} 
+            />
           </div>
         );
       })}

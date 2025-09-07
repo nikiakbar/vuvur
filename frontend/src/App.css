@@ -196,17 +196,36 @@ body.no-scroll {
   border-radius: 4px;
 }
 
-/* --- GALLERY CONTROLS --- */
+/* --- GALLERY CONTROLS (SHARED CLASS) --- */
 .settings {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
   gap: 1rem;
-  padding: 0.5rem;
+  padding: 1rem;
   border-radius: 8px;
   margin: 1rem;
+}
+
+.filter-input {
+  padding: 0.6em;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.sort-select {
+  padding: 0.6em;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.9rem;
 }
 
 .shuffle-button {
@@ -221,6 +240,26 @@ body.no-scroll {
 }
 .shuffle-button:hover {
   background-color: var(--accent-hover);
+}
+
+/* --- SCANNING PROGRESS --- */
+.scanning-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 200px);
+  padding: 2rem;
+  background-color: var(--card-bg);
+  border-radius: 8px;
+}
+.scanning-container h2 { margin-bottom: 1rem; }
+.scanning-container p { margin: 0.5rem 0; }
+.scanning-container progress {
+  width: 80%;
+  max-width: 500px;
+  height: 25px;
+  margin-top: 1rem;
 }
 
 /* --- MASONRY GALLERY STYLES --- */
@@ -238,11 +277,6 @@ body.no-scroll {
   cursor: pointer;
   break-inside: avoid;
   width: 100%;
-}
-.gallery-item img {
-  width: 100%;
-  height: auto;
-  display: block;
 }
 .image-dimension-overlay {
   position: absolute;
@@ -273,7 +307,7 @@ body.no-scroll {
   pointer-events: none;
 }
 
-/* --- UPDATED LAZY IMAGE STYLES --- */
+/* --- LAZY IMAGE STYLES --- */
 .lazy-image-placeholder {
   width: 100%;
   position: relative;
@@ -328,7 +362,8 @@ body.no-scroll {
   cursor: zoom-in;
 }
 .viewer-image-container video {
-  max-width: 95vw; max-height: 100vh;
+  max-width: 95vw;
+  max-height: 100vh;
   outline: none;
 }
 .viewer-image-container.zoomed { cursor: grab; }
@@ -351,6 +386,7 @@ body.no-scroll {
 .viewer-filename {
   color: #ccc; font-family: monospace;
   margin: 0 0 10px 0;
+  word-break: break-all;
 }
 .viewer-controls {
   position: static; background-color: transparent;

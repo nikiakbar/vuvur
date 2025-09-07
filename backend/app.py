@@ -18,7 +18,7 @@ CORS(app)
 IMAGE_DIR = '/mnt/gallery/images'
 VIDEO_DIR = '/mnt/gallery/videos'
 LIKED_DIR = '/mnt/gallery/liked'
-DATA_DIR = '/app/data'
+DATA_DIR = '/app/data' # App-specific data like caches
 
 PREVIEW_CACHE_DIR = os.path.join(DATA_DIR, 'cache_preview')
 THUMB_CACHE_DIR = os.path.join(DATA_DIR, 'cache_thumb')
@@ -41,19 +41,53 @@ def get_media_type(filename):
 def get_source_dir(media_type):
     return VIDEO_DIR if media_type == 'video' else IMAGE_DIR
 
+def get_exif_for_file(img_path):
+    """Reusable helper to extract serializable EXIF data from an image file."""
+    try:
+        img = Image.open(img_path)
+        exif_data = {}
+        if hasattr(img, '_getexif'):
+            exif_info = img._getexif()
+            if exif_info:
+                for tag, value in exif_info.items():
+                    decoded_tag = TAGS.get(tag, tag)
+                    if isinstance(value, bytes):
+                        try: value = value.decode('utf-8', errors='ignore')
+                        except: value = repr(value)
+                    exif_data[decoded_tag] = value
+        
+        if 'parameters' in img.info: exif_data['parameters'] = img.info['parameters']
+        elif 'Comment' in exif_data: exif_data['parameters'] = exif_data['Comment']
+        
+        return json.loads(json.dumps(exif_data, default=str))
+    except Exception:
+        return {}
+
 # --- BACKGROUND SCANNER ---
 def process_file(full_path):
+    """Worker function to process a single file and extract all metadata."""
     global SCAN_STATUS
     try:
         media_type = get_media_type(full_path)
         source_dir = get_source_dir(media_type)
         relative_path = os.path.relpath(full_path, source_dir).replace('\\', '/')
-        width, height = 0, 0
+        mod_time = os.path.getmtime(full_path)
+        width, height, exif = 0, 0, {}
+
         if media_type == 'image':
             with Image.open(full_path) as img:
                 width, height = img.size
+            exif = get_exif_for_file(full_path)
+        
         SCAN_STATUS["progress"] += 1
-        return {"path": relative_path, "width": width, "height": height, "type": media_type}
+        return {
+            "path": relative_path,
+            "width": width,
+            "height": height,
+            "type": media_type,
+            "mod_time": mod_time,
+            "exif": exif
+        }
     except Exception:
         SCAN_STATUS["progress"] += 1
         return None
@@ -63,6 +97,7 @@ def scan_and_cache_files():
     if SCAN_STATUS["scanning"]: return
     SCAN_STATUS = {"scanning": True, "progress": 0, "total": 0}
     print(f"Starting parallel media scan with {MAX_WORKERS} workers...")
+    
     paths = [os.path.join(root, f) for d in [IMAGE_DIR, VIDEO_DIR] for root, _, files in os.walk(d) for f in files]
     SCAN_STATUS["total"] = len(paths)
 
@@ -72,7 +107,7 @@ def scan_and_cache_files():
 
     with open(FILE_LIST_CACHE, 'w') as f: json.dump(all_media, f)
     SCAN_STATUS = {"scanning": False, "progress": SCAN_STATUS["total"], "total": SCAN_STATUS["total"]}
-    print(f"Scan complete. Cached {len(all_media)} media files.")
+    print(f"Scan complete. Indexed {len(all_media)} media files.")
 
 def get_latest_mod_time(directory):
     latest_mod = os.path.getmtime(directory)
@@ -82,9 +117,11 @@ def get_latest_mod_time(directory):
     return latest_mod
 
 def background_scanner_task():
+    """A persistent background task that periodically checks for updates."""
     while True:
         try:
             if not os.path.exists(FILE_LIST_CACHE):
+                print("Cache not found. Starting initial scan.")
                 scan_and_cache_files()
             else:
                 cache_mod_time = os.path.getmtime(FILE_LIST_CACHE)
@@ -92,9 +129,13 @@ def background_scanner_task():
                 vid_mod_time = get_latest_mod_time(VIDEO_DIR)
                 source_mod_time = max(img_mod_time, vid_mod_time)
                 if source_mod_time > cache_mod_time:
+                    print("Source directory has been modified. Re-scanning...")
                     scan_and_cache_files()
+                else:
+                    print("No changes detected. Sleeping.")
         except Exception as e:
             print(f"Error in background scanner: {e}")
+        
         time.sleep(SCAN_INTERVAL_SECONDS)
 
 def get_files_from_cache():
@@ -104,13 +145,39 @@ def get_files_from_cache():
 # --- API ENDPOINTS ---
 @app.route('/api/files')
 def list_files():
+    """Returns file list based on query parameters for filtering and sorting."""
     files_data = get_files_from_cache()
     if files_data is None:
         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
-    sort_order = request.args.get('sort', 'default')
-    if sort_order == 'random': random.shuffle(files_data)
-    else: files_data.sort(key=lambda x: x['path'])
-    return jsonify(files_data)
+
+    query = request.args.get('q', '').lower()
+    exif_query = request.args.get('exif_q', '').lower()
+    
+    filtered_list = files_data
+    
+    if query:
+        filtered_list = [f for f in filtered_list if query in f['path'].lower()]
+    
+    if exif_query:
+        filtered_list = [
+            f for f in filtered_list 
+            if exif_query in json.dumps(f.get('exif', {})).lower()
+        ]
+
+    sort_by = request.args.get('sort', 'random') # Default sort is now random
+
+    if sort_by == 'random':
+        random.shuffle(filtered_list)
+    elif sort_by == 'date_desc':
+        filtered_list.sort(key=lambda x: x['mod_time'], reverse=True)
+    elif sort_by == 'date_asc':
+        filtered_list.sort(key=lambda x: x['mod_time'])
+    elif sort_by == 'file_asc':
+        filtered_list.sort(key=lambda x: x['path'])
+    elif sort_by == 'file_desc':
+        filtered_list.sort(key=lambda x: x['path'], reverse=True)
+        
+    return jsonify(filtered_list)
 
 @app.route('/api/scan-status')
 def get_scan_status():
@@ -124,14 +191,6 @@ def random_files():
     if not all_files: return jsonify([])
     count = min(count, len(all_files))
     return jsonify(random.sample(all_files, k=count))
-
-@app.route('/api/thumbnail/<path:filename>')
-def serve_thumbnail(filename):
-    return generate_and_serve_cached_media(filename, THUMB_CACHE_DIR, THUMB_MAX_WIDTH, THUMB_QUALITY)
-
-@app.route('/api/preview/<path:filename>')
-def serve_preview_image(filename):
-    return generate_and_serve_cached_media(filename, PREVIEW_CACHE_DIR, PREVIEW_MAX_WIDTH, PREVIEW_QUALITY)
 
 def generate_and_serve_cached_media(filename, cache_dir, max_width, quality):
     cache_path = os.path.join(cache_dir, filename)
@@ -163,27 +222,13 @@ def generate_and_serve_cached_media(filename, cache_dir, max_width, quality):
         print(f"Error generating thumbnail for {filename}: {e}")
         abort(500)
 
-@app.route('/api/exif/<path:filename>')
-def get_exif_data(filename):
-    source_path = os.path.join(IMAGE_DIR, filename)
-    if not os.path.exists(source_path): abort(404)
-    try:
-        img = Image.open(source_path)
-        exif_data = {}
-        if hasattr(img, '_getexif'):
-            exif_info = img._getexif()
-            if exif_info:
-                for tag, value in exif_info.items():
-                    decoded_tag = TAGS.get(tag, tag)
-                    if isinstance(value, bytes):
-                        try: value = value.decode('utf-8', errors='ignore')
-                        except: value = repr(value)
-                    exif_data[decoded_tag] = value
-        if 'parameters' in img.info: exif_data['parameters'] = img.info['parameters']
-        elif 'Comment' in exif_data: exif_data['parameters'] = exif_data['Comment']
-        return jsonify(exif_data)
-    except Exception as e:
-        return jsonify({"error": f"Could not read EXIF data: {str(e)}"})
+@app.route('/api/preview/<path:filename>')
+def serve_preview_image(filename):
+    return generate_and_serve_cached_media(filename, PREVIEW_CACHE_DIR, PREVIEW_MAX_WIDTH, PREVIEW_QUALITY)
+
+@app.route('/api/thumbnail/<path:filename>')
+def serve_thumbnail(filename):
+    return generate_and_serve_cached_media(filename, THUMB_CACHE_DIR, THUMB_MAX_WIDTH, THUMB_QUALITY)
 
 @app.route('/api/view/all/<path:filename>')
 def serve_full_file(filename):
@@ -216,11 +261,9 @@ def delete_file(filename):
 @app.route('/api/cache/cleanup', methods=['POST'])
 def cleanup_cache():
     if os.path.exists(FILE_LIST_CACHE): os.remove(FILE_LIST_CACHE)
-    # Delete thumbnail/preview caches
     for cache_dir in [PREVIEW_CACHE_DIR, THUMB_CACHE_DIR]:
         if os.path.exists(cache_dir): shutil.rmtree(cache_dir)
         os.makedirs(cache_dir)
-    # Trigger a new scan immediately
     if not SCAN_STATUS["scanning"]:
         threading.Thread(target=scan_and_cache_files, daemon=True).start()
     return jsonify({"message": "All caches cleared. A new library scan has started."})

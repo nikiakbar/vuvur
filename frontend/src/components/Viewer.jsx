@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import MediaSlide from './MediaSlide'; // Import MediaSlide instead of ImageSlide
+import MediaSlide from './MediaSlide';
 
 const ExifDisplay = ({ data, onClose }) => (
   <div className="exif-overlay" onClick={onClose}>
@@ -25,10 +25,8 @@ const ExifDisplay = ({ data, onClose }) => (
 const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, setCurrentIndex }) => {
   const scrollContainerRef = useRef(null);
   const slideRefs = useRef([]);
-  const [exifData, setExifData] = useState(null);
   const [showExif, setShowExif] = useState(false);
-  const [isLoadingExif, setIsLoadingExif] = useState(false);
-
+  
   useEffect(() => {
     const handleKeyDown = (e) => { if (e.key === 'Escape') onClose() };
     window.addEventListener('keydown', handleKeyDown);
@@ -45,7 +43,6 @@ const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, 
           if (!isNaN(index)) {
             setCurrentIndex(index);
             setShowExif(false);
-            setExifData(null);
           }
         }
       });
@@ -58,29 +55,23 @@ const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, 
   const currentFile = files[currentIndex];
   if (!currentFile) return null;
 
-  const handleShowExif = async (filePath) => {
-    if (showExif) {
-      setShowExif(false);
-      return;
-    }
-    setShowExif(true);
-    if (exifData) return;
-    setIsLoadingExif(true);
-    try {
-      const response = await fetch(`/api/exif/${encodeURIComponent(filePath)}`);
-      const data = await response.json();
-      setExifData(data);
-    } catch (error) {
-      setExifData({ error: "Could not load metadata." });
-    } finally {
-      setIsLoadingExif(false);
+  const handleShowExif = () => {
+    if (currentFile.type === 'image') {
+      setShowExif(true);
     }
   };
 
   return (
     <div className="viewer-overlay" ref={scrollContainerRef}>
       <button className="close-button" onClick={onClose}>&times;</button>
-      {showExif && <ExifDisplay data={isLoadingExif ? { status: "Loading..." } : exifData} onClose={() => setShowExif(false)} />}
+      
+      {showExif && (
+        <ExifDisplay 
+          data={currentFile.exif || { error: "No EXIF data found." }} 
+          onClose={() => setShowExif(false)} 
+        />
+      )}
+
       {files.map((file, index) => (
         <div key={file.path + index} ref={(el) => (slideRefs.current[index] = el)} data-index={index}>
           <MediaSlide 

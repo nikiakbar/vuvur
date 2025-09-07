@@ -7,8 +7,8 @@ import RandomPage from './pages/RandomPage';
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  // New state for infinite scroll batch size, defaults to 20
   const [batchSize, setBatchSize] = useState(() => parseInt(localStorage.getItem('batchSize')) || 20);
+  const [showFullSize, setShowFullSize] = useState(false);
 
   useEffect(() => {
     document.body.className = '';
@@ -37,12 +37,25 @@ function App() {
       
       <main className={!isRandomPage ? "main-content" : "main-content-full"}>
         <Routes>
-          <Route path="/" element={<GalleryPage batchSize={batchSize} />} />
+          <Route 
+            path="/" 
+            element={<GalleryPage 
+              batchSize={batchSize} 
+              showFullSize={showFullSize} 
+              setShowFullSize={setShowFullSize} 
+            />} 
+          />
           <Route 
             path="/settings" 
-            element={<SettingsPage batchSize={batchSize} onBatchSizeChange={handleBatchSizeChange} />} 
+            element={<SettingsPage 
+              batchSize={batchSize} 
+              onBatchSizeChange={handleBatchSizeChange} 
+            />} 
           />
-          <Route path="/random" element={<RandomPage />} />
+          <Route 
+            path="/random" 
+            element={<RandomPage showFullSize={showFullSize} />} 
+          />
         </Routes>
       </main>
     </div>

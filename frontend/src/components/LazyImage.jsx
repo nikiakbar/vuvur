@@ -8,19 +8,22 @@ const LazyImage = ({ src, alt, width, height }) => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
+          // When the image placeholder is visible, start loading the real image
           if (entry.isIntersecting) {
             setIsLoaded(true);
-            observer.unobserve(entry.target);
+            observer.unobserve(entry.target); // Stop observing once loaded
           }
         });
       },
-      { rootMargin: '200px' }
+      // Start loading when the image is 200px away from the viewport
+      { rootMargin: '200px' } 
     );
 
     if (placeholderRef.current) {
       observer.observe(placeholderRef.current);
     }
 
+    // Cleanup observer on component unmount
     return () => {
       if (placeholderRef.current) {
         // eslint-disable-next-line react-hooks/exhaustive-deps

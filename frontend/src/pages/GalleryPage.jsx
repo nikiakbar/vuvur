@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-
-const BATCH_SIZE = 50;
+import { useDebounce } from '../useDebounce';
 
 function ScanningDisplay({ progress, total }) {
-  // ... (This sub-component remains unchanged)
   const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
   return (
     <div className="scanning-container">
-      <h2>Scanning Library (First-Time Setup)</h2>
+      <h2>Scanning Library...</h2>
       <p>Please wait, this may take several minutes for a large collection...</p>
       <progress value={progress} max={total}></progress>
       <p>{percent}% Complete</p>
@@ -18,16 +16,22 @@ function ScanningDisplay({ progress, total }) {
   );
 }
 
-function GalleryPage({ batchSize }) {
+function GalleryPage({ batchSize, showFullSize, setShowFullSize }) {
   const [files, setFiles] = useState([]);
   const [scanStatus, setScanStatus] = useState(null);
   const [visibleCount, setVisibleCount] = useState(batchSize);
   const [currentIndex, setCurrentIndex] = useState(null);
-  const [showFullSize, setShowFullSize] = useState(false);
-  const [sortOrder, setSortOrder] = useState('default');
+  const [sortBy, setSortBy] = useState('random');
+  const [filenameQuery, setFilenameQuery] = useState('');
+  const [exifQuery, setExifQuery] = useState('');
+
+  const debouncedFilenameQuery = useDebounce(filenameQuery, 500);
+  const debouncedExifQuery = useDebounce(exifQuery, 500);
   
   const observer = useRef();
 
+  useEffect(() => { setVisibleCount(batchSize) }, [batchSize]);
+  
   const lastImageElementRef = useCallback(node => {
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
@@ -40,33 +44,35 @@ function GalleryPage({ batchSize }) {
 
   const fetchFiles = useCallback(async () => {
     try {
-      const url = `/api/files${sortOrder === 'random' ? '?sort=random' : ''}`;
+      const params = new URLSearchParams({
+        sort: sortBy,
+        q: debouncedFilenameQuery,
+        exif_q: debouncedExifQuery
+      });
+      const url = `/api/files?${params.toString()}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Network response was not ok: ${response.statusText}`);
       const data = await response.json();
       
-      // THE FIX: Ensure the data from the API is an array before setting state.
       if (Array.isArray(data)) {
         setFiles(data);
         setScanStatus({ status: 'complete' });
+        setVisibleCount(batchSize); 
       } else if (data.status === 'scanning') {
         setScanStatus(data);
-        setFiles([]); // Ensure files is an empty array during scan
+        setFiles([]);
       } else {
-        // If we get an object that isn't a scan status, it's an error.
         console.error("API did not return an array:", data);
-        setFiles([]); // Fallback to an empty array to prevent crash
+        setFiles([]);
       }
     } catch (error) {
       console.error("Failed to fetch files:", error);
-      setFiles([]); // Fallback to an empty array on any fetch error
+      setFiles([]);
     }
-  }, [sortOrder]);
+  }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, batchSize]);
 
-  // Main effect to fetch initial data and poll for scan status
   useEffect(() => {
     fetchFiles();
-    
     let intervalId;
     if (scanStatus?.status === 'scanning') {
       intervalId = setInterval(async () => {
@@ -79,24 +85,13 @@ function GalleryPage({ batchSize }) {
         }
       }, 2000);
     }
-    
     return () => clearInterval(intervalId);
-  }, [sortOrder, scanStatus?.status, fetchFiles]);
+  }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, scanStatus?.status, fetchFiles]);
   
-  // ... (The rest of the component remains unchanged) ...
-  useEffect(() => {
-    setVisibleCount(batchSize);
-  }, [batchSize]);
-
-  const handleShuffle = () => {
-    setVisibleCount(batchSize);
-    setSortOrder(prev => (prev === 'random' ? 'default' : 'random'));
-  };
-
   const handleLike = async (filePath) => {
     try {
       await fetch(`/api/like/${filePath}`, { method: 'POST' });
-      fetchFiles();
+      setFiles(files.filter(f => f.path !== filePath)); // Optimistic UI update
       if (currentIndex !== null && files[currentIndex]?.path === filePath) {
         setCurrentIndex(null);
       }
@@ -107,7 +102,7 @@ function GalleryPage({ batchSize }) {
     if (window.confirm(`Are you sure you want to delete ${filePath}?`)) {
       try {
         await fetch(`/api/delete/${filePath}`, { method: 'DELETE' });
-        fetchFiles();
+        setFiles(files.filter(f => f.path !== filePath)); // Optimistic UI update
         if (currentIndex !== null && files[currentIndex]?.path === filePath) {
           setCurrentIndex(null);
         }
@@ -129,19 +124,37 @@ function GalleryPage({ batchSize }) {
 
   return (
     <>
-      <div className="settings">
+      <div className="controls-bar settings">
+        <input 
+          type="text"
+          placeholder="Filter by filename..."
+          className="filter-input"
+          value={filenameQuery}
+          onChange={(e) => setFilenameQuery(e.target.value)}
+        />
+        <input 
+          type="text"
+          placeholder="Search prompts/EXIF..."
+          className="filter-input"
+          value={exifQuery}
+          onChange={(e) => setExifQuery(e.target.value)}
+        />
+        <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <option value="random">Random</option>
+          <option value="date_desc">Date (Newest First)</option>
+          <option value="date_asc">Date (Oldest First)</option>
+          <option value="file_asc">Filename (A-Z)</option>
+          <option value="file_desc">Filename (Z-A)</option>
+        </select>
         <div className="setting-item">
             <input
               type="checkbox"
               id="full-size-toggle"
-              checked={showFullSize}
+              checked={showFullSize} 
               onChange={(e) => setShowFullSize(e.target.checked)}
             />
             <label htmlFor="full-size-toggle">Show Full-Size</label>
         </div>
-        <button onClick={handleShuffle} className="shuffle-button">
-            {sortOrder === 'random' ? 'Sorted Order' : 'Shuffle'}
-        </button>
       </div>
       
       <Gallery 
@@ -157,7 +170,7 @@ function GalleryPage({ batchSize }) {
           onClose={closeViewer}
           onLike={handleLike}
           onDelete={handleDelete}
-          showFullSize={showFullSize}
+          showFullSize={showFullSize} 
           setCurrentIndex={setCurrentIndex}
         />
       )}

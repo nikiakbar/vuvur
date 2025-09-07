@@ -4,7 +4,7 @@ import LazyImage from './LazyImage';
 const Gallery = ({ files, onImageClick, lastImageRef }) => {
 
   if (!files || files.length === 0) {
-    return <p>No media found. Check your mounted directories.</p>;
+    return <p>No media found. Check your filters or wait for the scan to complete.</p>;
   }
 
   return (
