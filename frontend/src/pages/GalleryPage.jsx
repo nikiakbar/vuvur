@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-import { useDebounce } from '../useDebounce';
+import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
-import { useSettings } from '../contexts/SettingsContext'; // Import the hook
+import { useSettings } from '../contexts/SettingsContext';
 
 function GalleryPage() {
-  const { settings } = useSettings(); // Use the global settings
-  const batchSize = settings.batch_size; // Get batch size from context
+  const { settings } = useSettings();
+  const batchSize = settings.batch_size;
 
   const [files, setFiles] = useState([]);
   const [scanStatus, setScanStatus] = useState(null);
@@ -23,7 +23,6 @@ function GalleryPage() {
   
   const observer = useRef();
 
-  // Reset visible count if the batch size setting changes
   useEffect(() => { setVisibleCount(batchSize) }, [batchSize]);
   
   const lastImageElementRef = useCallback(node => {
@@ -49,8 +48,7 @@ function GalleryPage() {
         q: debouncedFilenameQuery,
         exif_q: debouncedExifQuery,
         page: currentPage,
-        // The limit is now set by the backend based on settings, but we request it anyway
-        limit: batchSize 
+        limit: batchSize
       });
       const url = `/api/files?${params.toString()}`;
       const response = await fetch(url);
@@ -63,12 +61,18 @@ function GalleryPage() {
       } else if (data.status === 'scanning') {
         setScanStatus(data);
         setFiles([]);
-      } else { setFiles([]) }
-    } catch (error) { setFiles([]) } 
-    finally { setIsLoading(false) }
+      } else {
+        console.error("API did not return an array:", data);
+        setFiles([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch files:", error);
+      setFiles([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, page, batchSize]);
 
-  // ... (All other hooks and handlers remain the same as the previous version) ...
   useEffect(() => {
     let intervalId;
     if (scanStatus?.status === 'scanning') {
@@ -84,21 +88,44 @@ function GalleryPage() {
     }
     return () => clearInterval(intervalId);
   }, [scanStatus?.status, fetchFiles]);
+
   useEffect(() => {
     setPage(1);
     fetchFiles(true);
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, fetchFiles]);
+
   useEffect(() => {
-    if (page > 1) fetchFiles(false);
+    if (page > 1) {
+      fetchFiles(false);
+    }
   }, [page, fetchFiles]);
-  useEffect(() => { fetchFiles(true) }, []);
-  const handleLike = async (filePath) => { /* ... */ };
-  const handleDelete = async (filePath) => { /* ... */ };
+  
+  useEffect(() => {
+    fetchFiles(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
+  const handleLike = async (filePath) => {
+    await fetch(`/api/like/${filePath}`, { method: 'POST' });
+    setFiles(files.filter(f => f.path !== filePath));
+    if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
+  };
+  const handleDelete = async (filePath) => {
+    if (window.confirm(`Are you sure you want to delete ${filePath}?`)) {
+      await fetch(`/api/delete/${filePath}`, { method: 'DELETE' });
+      setFiles(files.filter(f => f.path !== filePath));
+      if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
+    }
+  };
+  
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
+
   const visibleFiles = files.slice(0, visibleCount);
 
-  if (!scanStatus) { return <div>Loading...</div>; }
+  if (!scanStatus) {
+    return <div>Loading...</div>;
+  }
   if (scanStatus.status === 'scanning') {
     return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
   }
@@ -106,19 +133,45 @@ function GalleryPage() {
   return (
     <>
       <div className="controls-bar settings">
-        {/* ... (Filter/sort controls are unchanged) ... */}
-        <input type="text" placeholder="Filter..." value={filenameQuery} onChange={(e) => setFilenameQuery(e.target.value)} />
-        <input type="text" placeholder="Search EXIF..." value={exifQuery} onChange={(e) => setExifQuery(e.target.value)} />
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-           {/* ... (options unchanged) ... */}
+        <input 
+          type="text"
+          placeholder="Filter by filename..."
+          className="filter-input"
+          value={filenameQuery}
+          onChange={(e) => setFilenameQuery(e.target.value)}
+        />
+        <input 
+          type="text"
+          placeholder="Search prompts/EXIF..."
+          className="filter-input"
+          value={exifQuery}
+          onChange={(e) => setExifQuery(e.target.value)}
+        />
+        <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <option value="random">Random</option>
+          <option value="date_desc">Date (Newest First)</option>
+          <option value="date_asc">Date (Oldest First)</option>
+          <option value="file_asc">Filename (A-Z)</option>
+          <option value="file_desc">Filename (Z-A)</option>
         </select>
         <div className="setting-item">
-            <input type="checkbox" id="full-size-toggle" checked={showFullSize} onChange={(e) => setShowFullSize(e.target.checked)} />
+            <input
+              type="checkbox"
+              id="full-size-toggle"
+              checked={showFullSize} 
+              onChange={(e) => setShowFullSize(e.target.checked)}
+            />
             <label htmlFor="full-size-toggle">Show Full-Size</label>
         </div>
       </div>
-      <Gallery files={visibleFiles} onImageClick={openViewer} lastImageRef={lastImageElementRef} />
+      
+      <Gallery 
+        files={visibleFiles} 
+        onImageClick={openViewer} 
+        lastImageRef={lastImageElementRef}
+      />
       {isLoading && page > 1 && <div className="loading-spinner"></div>}
+
       {currentIndex !== null && files.length > 0 && (
         <Viewer
           files={files}
@@ -128,7 +181,7 @@ function GalleryPage() {
           onDelete={handleDelete}
           showFullSize={showFullSize} 
           setCurrentIndex={setCurrentIndex}
-          zoomLevel={settings.zoom_level} // Get zoom level from context
+          zoomLevel={settings.zoom_level}
         />
       )}
     </>
