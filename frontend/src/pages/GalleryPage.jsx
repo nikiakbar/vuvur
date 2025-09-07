@@ -149,7 +149,7 @@ function GalleryPage() {
           value={exifQuery}
           onChange={(e) => setExifQuery(e.target.value)}
         />
-        <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target..value)}>
+        <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
           <option value="random">Random</option>
           <option value="date_desc">Date (Newest First)</option>
           <option value="date_asc">Date (Oldest First)</option>
