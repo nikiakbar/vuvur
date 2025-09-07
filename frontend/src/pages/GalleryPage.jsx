@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
-import useDebounce from '../useDebounce'; // Changed this import (no curly braces)
+import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 
 function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
@@ -30,6 +30,10 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
     });
     if (node) observer.current.observe(node);
   }, [files.length, visibleCount, batchSize]);
+
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
   const fetchFiles = useCallback(async (isNewSearch = false) => {
     setIsLoading(true);
@@ -63,13 +67,9 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
     } finally {
       setIsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, page, batchSize]);
 
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-
+  // Effect for polling the scan status
   useEffect(() => {
     let intervalId;
     if (scanStatus?.status === 'scanning') {
@@ -78,7 +78,7 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
         const data = await res.json();
         setScanStatus(data);
         if (data.status === 'complete') {
-          fetchFiles(true);
+          fetchFiles(true); // Fetch files once scan is complete
           clearInterval(intervalId);
         }
       }, 2000);
@@ -86,21 +86,20 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
     return () => clearInterval(intervalId);
   }, [scanStatus?.status, fetchFiles]);
 
+  // Effect for handling filter/sort changes (This also runs on mount, fetching initial data)
   useEffect(() => {
-    setPage(1);
-    fetchFiles(true);
+    setPage(1); // Reset to page 1 on any filter change
+    fetchFiles(true); // Fetch as a new search
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, fetchFiles]);
 
+  // Effect for loading next page
   useEffect(() => {
     if (page > 1) {
-      fetchFiles(false);
+      fetchFiles(false); // Fetch the next page (not a new search)
     }
   }, [page, fetchFiles]);
   
-  useEffect(() => {
-    fetchFiles(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // THE REDUNDANT "initial load" useEffect has been REMOVED.
   
   const handleLike = async (filePath) => {
     await fetch(`/api/like/${filePath}`, { method: 'POST' });
@@ -121,7 +120,7 @@ function GalleryPage({ batchSize, showFullSize, setShowFullSize, zoomLevel }) {
   const visibleFiles = files.slice(0, visibleCount);
 
   if (!scanStatus) {
-    return <div>Loading...</div>;
+    return <div>Loading...</div>; // Initial state before first fetch attempt
   }
   if (scanStatus.status === 'scanning') {
     return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
