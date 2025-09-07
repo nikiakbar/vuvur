@@ -42,7 +42,6 @@ def get_db():
     return db
 
 def init_db():
-    """Initializes the database schema. Safe to call multiple times."""
     with get_db() as db:
         db.execute('''
         CREATE TABLE IF NOT EXISTS media (
@@ -119,8 +118,7 @@ def scan_and_cache_files():
 
     print(f"Indexing {len(media_data)} items into database...")
     with get_db() as db:
-        # We already called init_db, so the table is guaranteed to exist
-        db.execute("DELETE FROM media") # Clear old data
+        db.execute("DELETE FROM media")
         db.executemany(
             "INSERT OR REPLACE INTO media (path, type, width, height, mod_time, exif_json) VALUES (?, ?, ?, ?, ?, ?)",
             media_data
@@ -138,35 +136,45 @@ def get_latest_mod_time(directory):
     return latest_mod
 
 def background_scanner_task():
+    """A persistent background task that periodically checks for updates."""
     while True:
         try:
             init_db() # Ensure DB exists before checking it
-            db_mtime = 0
-            if os.path.exists(DB_PATH):
-                db_mtime = os.path.getmtime(DB_PATH)
-
-            img_mod_time = get_latest_mod_time(IMAGE_DIR)
-            vid_mod_time = get_latest_mod_time(VIDEO_DIR)
-            source_mod_time = max(img_mod_time, vid_mod_time)
             
-            if source_mod_time > db_mtime:
+            db_populated = False
+            if os.path.exists(DB_PATH):
+                 with get_db() as db:
+                    try:
+                        count = db.execute("SELECT COUNT(1) FROM media").fetchone()[0]
+                        if count > 0:
+                            db_populated = True
+                    except sqlite3.OperationalError:
+                        db_populated = False # Table doesn't exist, needs scan
+
+            if not db_populated:
+                print("Database is empty or missing. Starting initial scan.")
                 scan_and_cache_files()
+            else:
+                db_mod_time = os.path.getmtime(DB_PATH) # Check the DB file mod time
+                img_mod_time = get_latest_mod_time(IMAGE_DIR)
+                vid_mod_time = get_latest_mod_time(VIDEO_DIR)
+                source_mod_time = max(img_mod_time, vid_mod_time)
+                
+                if source_mod_time > db_mod_time:
+                    print("Source directory has been modified. Re-scanning...")
+                    scan_and_cache_files()
+                else:
+                    print("No changes detected. Sleeping.")
         except Exception as e:
             print(f"Error in background scanner: {e}")
+        
         time.sleep(SCAN_INTERVAL_SECONDS)
-
-def get_files_from_db_cache():
-    """Helper to get the cached file list from the DB."""
-    init_db() # Ensure table exists before reading
-    with get_db() as db:
-        return db.execute("SELECT * FROM media").fetchall()
 
 # --- API ENDPOINTS ---
 @app.route('/api/files')
 def list_files():
-    if not os.path.exists(DB_PATH) or (SCAN_STATUS["scanning"] and SCAN_STATUS["progress"] == 0):
-        if not SCAN_STATUS["scanning"]:
-             threading.Thread(target=scan_and_cache_files, daemon=True).start()
+    # Check if scan is in progress or cache doesn't exist
+    if SCAN_STATUS["scanning"] or not os.path.exists(DB_PATH):
         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
     
     try:
@@ -224,7 +232,8 @@ def list_files():
         })
     except Exception as e:
         print(f"Error in list_files: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        # If we get an error (e.g., table doesn't exist yet), report scanning
+        return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
 
 
 @app.route('/api/scan-status')
