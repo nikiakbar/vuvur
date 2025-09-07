@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 
-// Receive zoomLevel as a prop
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -12,32 +11,70 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     ? `/api/view/all/${encodeURIComponent(file.path)}`
     : `/api/preview/${encodeURIComponent(file.path)}`;
 
-  const handleMouseDown = (e) => {
-    if (!isZoomed || file.type !== 'image') return;
-    e.preventDefault();
+  // --- Unified Event Logic ---
+
+  const handlePointerDown = (clientX, clientY) => {
+    if (!isZoomed || file.type !== 'image') {
+      // If not zoomed, set didDrag to false so the "up" event will trigger zoom
+      setDidDrag(false);
+      return;
+    }
+    // If we are zoomed, prepare to pan
     setIsDragging(true);
-    setStartPos({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+    setStartPos({ 
+      x: clientX - panOffset.x,
+      y: clientY - panOffset.y 
+    });
     setDidDrag(false);
   };
 
-  const handleMouseMove = (e) => {
-    if (!isDragging) return;
-    setDidDrag(true);
-    setPanOffset({ x: e.clientX - startPos.x, y: e.clientY - startPos.y });
+  const handlePointerMove = (clientX, clientY) => {
+    if (!isZoomed || !isDragging) return;
+    setDidDrag(true); // Flag that a drag has occurred
+    setPanOffset({
+      x: clientX - startPos.x,
+      y: clientY - startPos.y
+    });
   };
 
-  const handleMouseUpOrLeave = () => {
+  const handlePointerUp = () => {
     setIsDragging(false);
-  };
-  
-  const handleClick = (e) => {
-    e.stopPropagation();
-    if (file.type !== 'image') return;
+    // If we didn't drag, it was a click/tap. Toggle zoom.
     if (!didDrag) {
-      setIsZoomed(prev => !prev);
-      if (isZoomed) {
+      const newZoomState = !isZoomed;
+      setIsZoomed(newZoomState);
+      if (!newZoomState) {
+        // If we just zoomed out, reset the pan
         setPanOffset({ x: 0, y: 0 });
       }
+    }
+  };
+
+  // --- Mouse Event Handlers ---
+  const handleMouseDown = (e) => {
+    e.preventDefault(); // Prevent default image drag
+    handlePointerDown(e.clientX, e.clientY);
+  };
+
+  const handleMouseMove = (e) => {
+    handlePointerMove(e.clientX, e.clientY);
+  };
+
+  // --- Touch Event Handlers ---
+  const handleTouchStart = (e) => {
+    if (e.touches.length !== 1) return; // Only pan with one finger
+    handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length !== 1) return;
+    handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+  };
+
+  // onMouseLeave handles if the user drags off-screen
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      handlePointerUp();
     }
   };
 
@@ -45,19 +82,21 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     <div className="viewer-slide">
       <div 
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''} ${isDragging ? 'dragging' : ''}`}
-        onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUpOrLeave}
-        onMouseLeave={handleMouseUpOrLeave}
+        onMouseUp={handlePointerUp}
+        onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handlePointerUp}
       >
         {file.type === 'image' ? (
           <img 
             src={mediaUrl} 
             alt={file.path} 
             style={{ 
-              // Use the zoomLevel prop here instead of 2.5
-              transform: `scale(${isZoomed ? zoomLevel : 1}) translate(${panOffset.x}px, ${panOffset.y}px)` 
+              transform: `scale(${isZoomed ? zoomLevel : 1}) translate(${panOffset.x}px, ${panOffset.y}px)`,
+              pointerEvents: isZoomed ? 'none' : 'auto' // Prevent image ghost-drag
             }}
           />
         ) : (
