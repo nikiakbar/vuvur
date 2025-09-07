@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 
 function SettingsPage({ 
   batchSize, onBatchSizeChange, isBatchSizeLocked,
-  preloadCount, onPreloadCountChange, isPreloadCountLocked 
+  preloadCount, onPreloadCountChange, isPreloadCountLocked,
+  zoomLevel, onZoomLevelChange, isZoomLevelLocked
 }) {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleCleanup = async () => {
+    // ... (cleanup logic is unchanged) ...
     setIsLoading(true);
     setMessage('Clearing all caches and triggering library re-scan...');
     try {
@@ -27,17 +29,13 @@ function SettingsPage({
       <h2>Settings</h2>
       
       <div className="settings-section">
-        <h3>Performance Settings</h3>
+        <h3>Performance & View Settings</h3>
         <div className="setting-option">
           <label htmlFor="batch-size-input">Gallery images per scroll</label>
           <input
-            type="number"
-            id="batch-size-input"
-            value={batchSize}
-            onChange={(e) => onBatchSizeChange(e.target.value)}
-            min="1"
-            step="5"
-            disabled={isBatchSizeLocked}
+            type="number" id="batch-size-input"
+            value={batchSize} onChange={(e) => onBatchSizeChange(e.target.value)}
+            min="1" step="5" disabled={isBatchSizeLocked}
           />
         </div>
         {isBatchSizeLocked && <small className="setting-warning">This setting is locked by your server environment.</small>}
@@ -45,16 +43,22 @@ function SettingsPage({
         <div className="setting-option">
           <label htmlFor="preload-input">Random page preload count</label>
           <input
-            type="number"
-            id="preload-input"
-            value={preloadCount}
-            onChange={(e) => onPreloadCountChange(e.target.value)}
-            min="0"
-            step="1"
-            disabled={isPreloadCountLocked}
+            type="number" id="preload-input"
+            value={preloadCount} onChange={(e) => onPreloadCountChange(e.target.value)}
+            min="0" step="1" disabled={isPreloadCountLocked}
           />
         </div>
         {isPreloadCountLocked && <small className="setting-warning">This setting is locked by your server environment.</small>}
+
+        <div className="setting-option">
+          <label htmlFor="zoom-input">Viewer click-zoom level</label>
+          <input
+            type="number" id="zoom-input"
+            value={zoomLevel} onChange={(e) => onZoomLevelChange(e.target.value)}
+            min="1.1" step="0.1" disabled={isZoomLevelLocked}
+          />
+        </div>
+        {isZoomLevelLocked && <small className="setting-warning">This setting is locked by your server environment.</small>}
       </div>
       
       <div className="settings-section">

@@ -5,31 +5,30 @@ import GalleryPage from './pages/GalleryPage';
 import SettingsPage from './pages/SettingsPage';
 import RandomPage from './pages/RandomPage';
 
-// --- Helper function to read settings based on priority ---
+// Helper function updated to use parseFloat for decimal support
 function getInitialSetting(envVarName, storageKey, defaultValue) {
   const envValue = window.env[envVarName];
   if (envValue && envValue !== "") {
-    // 1. Docker environment variable has highest priority
-    return { value: parseInt(envValue), isLocked: true };
+    return { value: parseFloat(envValue), isLocked: true };
   }
   const storedValue = localStorage.getItem(storageKey);
   if (storedValue) {
-    // 2. User's saved setting is next
-    return { value: parseInt(storedValue), isLocked: false };
+    return { value: parseFloat(storedValue), isLocked: false };
   }
-  // 3. Fallback to hardcoded default
   return { value: defaultValue, isLocked: false };
 }
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  
-  // --- Initialize settings using our new priority logic ---
   const [batchSizeSetting, setBatchSizeSetting] = useState(
     getInitialSetting('GALLERY_BATCH_SIZE', 'batchSize', 20)
   );
   const [preloadCountSetting, setPreloadCountSetting] = useState(
     getInitialSetting('RANDOM_PRELOAD_COUNT', 'preloadCount', 3)
+  );
+  // Add new state for zoom level, defaulting to 2.5
+  const [zoomLevelSetting, setZoomLevelSetting] = useState(
+    getInitialSetting('ZOOM_LEVEL', 'zoomLevel', 2.5)
   );
   const [showFullSize, setShowFullSize] = useState(false);
 
@@ -43,9 +42,8 @@ function App() {
     setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
   };
 
-  // --- Handlers will now only save to storage if the setting is NOT locked by Docker ---
   const handleBatchSizeChange = (newSize) => {
-    if (batchSizeSetting.isLocked) return; // Do nothing if locked
+    if (batchSizeSetting.isLocked) return;
     const size = parseInt(newSize);
     if (size > 0) {
       setBatchSizeSetting({ value: size, isLocked: false });
@@ -54,11 +52,21 @@ function App() {
   };
 
   const handlePreloadCountChange = (newSize) => {
-    if (preloadCountSetting.isLocked) return; // Do nothing if locked
+    if (preloadCountSetting.isLocked) return;
     const size = parseInt(newSize);
     if (size >= 0) {
       setPreloadCountSetting({ value: size, isLocked: false });
       localStorage.setItem('preloadCount', size);
+    }
+  };
+
+  // New handler for zoom level
+  const handleZoomLevelChange = (newZoom) => {
+    if (zoomLevelSetting.isLocked) return;
+    const zoom = parseFloat(newZoom);
+    if (zoom > 1.0) {
+      setZoomLevelSetting({ value: zoom, isLocked: false });
+      localStorage.setItem('zoomLevel', zoom);
     }
   };
 
@@ -77,6 +85,7 @@ function App() {
               batchSize={batchSizeSetting.value} 
               showFullSize={showFullSize} 
               setShowFullSize={setShowFullSize} 
+              zoomLevel={zoomLevelSetting.value}
             />} 
           />
           <Route 
@@ -88,6 +97,9 @@ function App() {
               preloadCount={preloadCountSetting.value}
               onPreloadCountChange={handlePreloadCountChange}
               isPreloadCountLocked={preloadCountSetting.isLocked}
+              zoomLevel={zoomLevelSetting.value}
+              onZoomLevelChange={handleZoomLevelChange}
+              isZoomLevelLocked={zoomLevelSetting.isLocked}
             />} 
           />
           <Route 
@@ -95,6 +107,7 @@ function App() {
             element={<RandomPage 
               showFullSize={showFullSize} 
               preloadCount={preloadCountSetting.value} 
+              zoomLevel={zoomLevelSetting.value}
             />} 
           />
         </Routes>

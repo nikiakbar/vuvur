@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
-const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls }) => {
+// Receive zoomLevel as a prop
+const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
@@ -34,7 +35,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     if (file.type !== 'image') return;
     if (!didDrag) {
       setIsZoomed(prev => !prev);
-      if (isZoomed) { // If we are zooming out, reset pan
+      if (isZoomed) {
         setPanOffset({ x: 0, y: 0 });
       }
     }
@@ -54,7 +55,10 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
           <img 
             src={mediaUrl} 
             alt={file.path} 
-            style={{ transform: `scale(${isZoomed ? 2.5 : 1}) translate(${panOffset.x}px, ${panOffset.y}px)` }}
+            style={{ 
+              // Use the zoomLevel prop here instead of 2.5
+              transform: `scale(${isZoomed ? zoomLevel : 1}) translate(${panOffset.x}px, ${panOffset.y}px)` 
+            }}
           />
         ) : (
           <video src={mediaUrl} controls autoPlay muted loop />
