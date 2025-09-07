@@ -1,21 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
-import MediaSlide from './MediaSlide'; 
+import MediaSlide from './MediaSlide';
+import ExifDisplay from './ExifDisplay'; // Import the new component
 
-const ExifDisplay = ({ data, onClose }) => (
-  // ... (This sub-component remains unchanged)
-  <div className="exif-overlay" onClick={onClose}>{/*...*/}</div>
-);
+// The ExifDisplay component definition has been removed from this file
 
-// Receive zoomLevel as a prop
 const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, setCurrentIndex, zoomLevel }) => {
   const scrollContainerRef = useRef(null);
   const slideRefs = useRef([]);
   const [showExif, setShowExif] = useState(false);
   
-  // ... (all hooks remain unchanged) ...
-  useEffect(() => { /* ... (Esc key) ... */ }, [onClose]);
-  useEffect(() => { /* ... (scroll to index on mount) ... */ }, []);
-  useEffect(() => { /* ... (IntersectionObserver) ... */ }, [files, setCurrentIndex]);
+  useEffect(() => {
+    const handleKeyDown = (e) => { if (e.key === 'Escape') onClose() };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => { slideRefs.current[currentIndex]?.scrollIntoView({ block: 'center' }) }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const index = parseInt(entry.target.dataset.index, 10);
+          if (!isNaN(index)) {
+            setCurrentIndex(index);
+            setShowExif(false);
+          }
+        }
+      });
+    }, { root: scrollContainerRef.current, threshold: 0.7 });
+    const refs = slideRefs.current;
+    refs.forEach((ref) => { if (ref) observer.observe(ref) });
+    return () => { refs.forEach((ref) => { if (ref) observer.unobserve(ref) }) };
+  }, [files, setCurrentIndex]);
   
   const currentFile = files[currentIndex];
   if (!currentFile) return null;
@@ -48,7 +65,7 @@ const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, 
             onDelete={onDelete}
             onShowExif={handleShowExif}
             showControls={true}
-            zoomLevel={zoomLevel} /* Pass the prop down */
+            zoomLevel={zoomLevel}
           />
         </div>
       ))}
