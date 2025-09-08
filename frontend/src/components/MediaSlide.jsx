@@ -1,22 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
+  const containerRef = useRef(null);
 
   const mediaUrl = showFullSize 
     ? `/api/view/all/${encodeURIComponent(file.path)}`
     : `/api/preview/${encodeURIComponent(file.path)}`;
 
   const toggleZoom = (e) => {
-    // Prevent a click on the image from triggering anything behind it
     e.stopPropagation(); 
-    if (file.type === 'image') {
-      setIsZoomed(prev => !prev);
+    if (file.type !== 'image') {
+      return;
+    }
+
+    const newZoomState = !isZoomed;
+    setIsZoomed(newZoomState);
+
+    if (newZoomState) {
+      // This is the fix:
+      // After React renders the 'zoomed' class, push this task to the event queue.
+      // This gives the browser time to calculate the new scroll dimensions.
+      setTimeout(() => {
+        if (containerRef.current) {
+          const container = containerRef.current;
+          // Calculate the new center scroll position
+          const scrollWidth = container.scrollWidth - container.clientWidth;
+          const scrollHeight = container.scrollHeight - container.clientHeight;
+          // Set the scrollbars to the middle
+          container.scrollLeft = scrollWidth / 2;
+          container.scrollTop = scrollHeight / 2;
+        }
+      }, 0);
     }
   };
 
-  // For videos, we don't want the zoom click. 
-  // We attach the click handler only to the container.
   const handleContainerClick = (e) => {
     if (file.type === 'image') {
       toggleZoom(e);
@@ -26,6 +44,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
   return (
     <div className="viewer-slide">
       <div 
+        ref={containerRef}
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
         onClick={handleContainerClick}
       >
@@ -35,7 +54,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
             alt={file.path} 
             style={{ 
               transform: `scale(${isZoomed ? zoomLevel : 1})`,
-              pointerEvents: isZoomed ? 'auto' : 'none' // Let img be interactive when zoomed
+              pointerEvents: isZoomed ? 'auto' : 'none'
             }}
           />
         ) : (
@@ -45,7 +64,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
             autoPlay 
             muted 
             loop 
-            onClick={(e) => e.stopPropagation()} // Stop video click from zooming out
+            onClick={(e) => e.stopPropagation()} 
           />
         )}
       </div>
