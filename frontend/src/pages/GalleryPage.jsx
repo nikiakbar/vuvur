@@ -7,39 +7,39 @@ import { useSettings } from '../contexts/SettingsContext';
 
 function GalleryPage() {
   const { settings } = useSettings();
-  
   const batchSize = settings?.batch_size || 20;
   const zoomLevel = settings?.zoom_level || 2.5;
 
   const [files, setFiles] = useState([]);
   const [scanStatus, setScanStatus] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(batchSize);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [showFullSize, setShowFullSize] = useState(false);
   const [sortBy, setSortBy] = useState('random');
   const [filenameQuery, setFilenameQuery] = useState('');
   const [exifQuery, setExifQuery] = useState('');
+  
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
 
   const debouncedFilenameQuery = useDebounce(filenameQuery, 500);
   const debouncedExifQuery = useDebounce(exifQuery, 500);
   
   const observer = useRef();
 
-  useEffect(() => { setVisibleCount(batchSize) }, [batchSize]);
-  
+  // Remove the old 'visibleCount' logic from this callback
   const lastImageElementRef = useCallback(node => {
+    if (isLoading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && files.length > visibleCount) {
-        setVisibleCount(prev => prev + batchSize);
+      // This logic is correct: if the last element is visible and we are not on the last page, load the next page.
+      if (entries[0].isIntersecting && page < totalPages) {
+        setPage(prevPage => prevPage + 1);
       }
     });
     if (node) observer.current.observe(node);
-  }, [files.length, visibleCount, batchSize]);
+  }, [isLoading, page, totalPages]);
 
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
 
   const fetchFiles = useCallback(async (isNewSearch = false) => {
     setIsLoading(true);
@@ -75,6 +75,7 @@ function GalleryPage() {
     }
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, page, batchSize]);
 
+  // ... (All other hooks and handlers remain the same) ...
   useEffect(() => {
     let intervalId;
     if (scanStatus?.status === 'scanning') {
@@ -90,23 +91,19 @@ function GalleryPage() {
     }
     return () => clearInterval(intervalId);
   }, [scanStatus?.status, fetchFiles]);
-
   useEffect(() => {
     setPage(1);
     fetchFiles(true);
   }, [sortBy, debouncedFilenameQuery, debouncedExifQuery, fetchFiles]);
-
   useEffect(() => {
     if (page > 1) {
       fetchFiles(false);
     }
   }, [page, fetchFiles]);
-  
   useEffect(() => {
     fetchFiles(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
   const handleLike = async (filePath) => {
     await fetch(`/api/like/${filePath}`, { method: 'POST' });
     setFiles(files.filter(f => f.path !== filePath));
@@ -119,15 +116,10 @@ function GalleryPage() {
       if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
     }
   };
-  
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
 
-  const visibleFiles = files.slice(0, visibleCount);
-
-  if (!scanStatus) {
-    return <div>Loading...</div>;
-  }
+  if (!scanStatus) { return <div>Loading...</div>; }
   if (scanStatus.status === 'scanning') {
     return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
   }
@@ -168,7 +160,7 @@ function GalleryPage() {
       </div>
       
       <Gallery 
-        files={visibleFiles} 
+        files={files} 
         onImageClick={openViewer} 
         lastImageRef={lastImageElementRef}
       />

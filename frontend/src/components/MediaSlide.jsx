@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
-  const containerRef = useRef(null);
+  const containerRef = useRef(null); // Create a ref for the container
 
   const mediaUrl = showFullSize 
     ? `/api/view/all/${encodeURIComponent(file.path)}`
@@ -18,20 +18,18 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     setIsZoomed(newZoomState);
 
     if (newZoomState) {
-      // This is the fix:
-      // After React renders the 'zoomed' class, push this task to the event queue.
-      // This gives the browser time to calculate the new scroll dimensions.
+      // After zooming IN, run this logic
       setTimeout(() => {
         if (containerRef.current) {
           const container = containerRef.current;
-          // Calculate the new center scroll position
+          // Calculate the new center scroll positions
           const scrollWidth = container.scrollWidth - container.clientWidth;
           const scrollHeight = container.scrollHeight - container.clientHeight;
           // Set the scrollbars to the middle
           container.scrollLeft = scrollWidth / 2;
           container.scrollTop = scrollHeight / 2;
         }
-      }, 0);
+      }, 0); // setTimeout of 0 pushes this task to the end of the event queue
     }
   };
 
@@ -44,7 +42,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
   return (
     <div className="viewer-slide">
       <div 
-        ref={containerRef}
+        ref={containerRef} // Attach the ref here
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
         onClick={handleContainerClick}
       >
