@@ -260,22 +260,32 @@ body.no-scroll {
 }
 
 
-/* --- MASONRY GALLERY STYLES --- */
+/* --- NEW REACT-MASONRY-CSS STYLES --- */
+/* Remove the old column-count styles */
 .gallery-masonry-container {
-  column-count: 2;
-  column-gap: 0;
+  display: none; /* Hide the old class if it's still being rendered */
 }
-@media (min-width: 768px) { .gallery-masonry-container { column-count: 3; } }
-@media (min-width: 1024px) { .gallery-masonry-container { column-count: 4; } }
-@media (min-width: 1400px) { .gallery-masonry-container { column-count: 5; } }
 
+/* These are the new styles for the library */
+.gallery-masonry-grid {
+  display: flex;
+  width: 100%;
+}
+.gallery-masonry-column {
+  /* This library handles the column logic, so no specific styling needed here */
+  background-clip: padding-box;
+}
 .gallery-item {
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  break-inside: avoid;
   width: 100%;
+  /* We add a small gap by putting margin-bottom on the item */
+  /* This is better than column-gap for this library */
+  margin-bottom: 0px; /* Set to 0 for no gap */
 }
+/* --- END NEW MASONRY STYLES --- */
+
 .image-dimension-overlay {
   position: absolute;
   bottom: 0;
@@ -356,21 +366,30 @@ body.no-scroll {
   align-items: center;
   overflow: hidden; 
 }
-
+.viewer-image-container.zoomed {
+  overflow: auto;
+  cursor: zoom-out;
+}
 .viewer-image-container img {
-  max-width: 95vw;
-  max-height: 100vh;
+  max-width: 95vw; max-height: 100vh;
   object-fit: contain;
   border-radius: 4px;
   will-change: transform;
+  transition: transform 0.3s ease;
+  cursor: zoom-in;
 }
-
+.viewer-image-container.zoomed img {
+  max-width: none;
+  max-height: none;
+  transition: none;
+  cursor: default;
+  pointer-events: auto;
+}
 .viewer-image-container video {
   max-width: 95vw;
   max-height: 100vh;
   outline: none;
 }
-
 .slide-info {
   position: absolute; bottom: 20px; left: 50%;
   transform: translateX(-50%);

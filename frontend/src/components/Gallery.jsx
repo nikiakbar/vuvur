@@ -1,5 +1,6 @@
 import React from 'react';
 import LazyImage from './LazyImage';
+import Masonry from 'react-masonry-css';
 
 const Gallery = ({ files, onImageClick, lastImageRef }) => {
 
@@ -7,8 +8,20 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
     return <p>No media found. Check your filters or wait for the scan to complete.</p>;
   }
 
+  // Define the number of columns at different browser widths
+  const breakpointColumnsObj = {
+    default: 5,
+    1400: 4,
+    1024: 3,
+    768: 2
+  };
+
   return (
-    <div className="gallery-masonry-container">
+    <Masonry
+      breakpointCols={breakpointColumnsObj}
+      className="gallery-masonry-grid"
+      columnClassName="gallery-masonry-column"
+    >
       {files.map((file, index) => {
         const isLastElement = index === files.length - 1;
         return (
@@ -31,7 +44,7 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
           </div>
         );
       })}
-    </div>
+    </Masonry>
   );
 };
 
