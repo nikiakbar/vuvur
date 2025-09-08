@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
-  const containerRef = useRef(null); // Create a ref for the container
+  const containerRef = useRef(null); 
 
   const mediaUrl = showFullSize 
     ? `/api/view/all/${encodeURIComponent(file.path)}`
@@ -18,18 +18,15 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     setIsZoomed(newZoomState);
 
     if (newZoomState) {
-      // After zooming IN, run this logic
       setTimeout(() => {
         if (containerRef.current) {
           const container = containerRef.current;
-          // Calculate the new center scroll positions
           const scrollWidth = container.scrollWidth - container.clientWidth;
           const scrollHeight = container.scrollHeight - container.clientHeight;
-          // Set the scrollbars to the middle
           container.scrollLeft = scrollWidth / 2;
           container.scrollTop = scrollHeight / 2;
         }
-      }, 0); // setTimeout of 0 pushes this task to the end of the event queue
+      }, 0);
     }
   };
 
@@ -42,7 +39,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
   return (
     <div className="viewer-slide">
       <div 
-        ref={containerRef} // Attach the ref here
+        ref={containerRef} 
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
         onClick={handleContainerClick}
       >
