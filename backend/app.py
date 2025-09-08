@@ -138,7 +138,7 @@ def get_latest_mod_time(directory):
 
 def background_scanner_task():
     print("Background scanner thread started. Waiting 10s for app startup...")
-    time.sleep(10) # Add a 10-second grace period
+    time.sleep(10)
     print("Scanner awake. Starting main loop.")
     
     while True:
@@ -254,7 +254,17 @@ def list_files():
         params.extend([limit, offset])
         with get_db() as db:
             results = db.execute(sql_query, params).fetchall()
-            items = [dict(row, exif=json.loads(row.pop('exif_json') or '{}')) for row in results]
+            items = []
+            for row in results:
+                exif_string = row['exif_json'] or '{}'
+                items.append({
+                    "path": row['path'],
+                    "type": row['type'],
+                    "width": row['width'],
+                    "height": row['height'],
+                    "mod_time": row['mod_time'],
+                    "exif": json.loads(exif_string)
+                })
         return jsonify({"total_items": total_count, "page": page, "total_pages": (total_count // limit) + 1, "items": items})
     except Exception as e:
         print(f"Error in list_files: {e}")
