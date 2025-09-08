@@ -6,16 +6,17 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentPan, setCurrentPan] = useState({ x: 0, y: 0 });
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
-  const [didDrag, setDidDrag] = useState(false);
   
-  const DRAG_THRESHOLD = 30; // Pixel "dead zone"
+  // Use a ref to track drag state. This avoids re-render conflicts with the click handler.
+  const didDrag = useRef(false);
+  const DRAG_THRESHOLD = 10; // Back to a smaller threshold, the logic is safer now.
 
   const mediaUrl = showFullSize 
     ? `/api/view/all/${encodeURIComponent(file.path)}`
     : `/api/preview/${encodeURIComponent(file.path)}`;
 
   const handlePointerDown = (clientX, clientY) => {
-    setDidDrag(false); // Reset drag status on every new touch/click
+    didDrag.current = false; // Reset drag status on every new touch/click
     setIsDragging(true);
     setStartPos({ x: clientX, y: clientY });
     setStartPan(currentPan); // Store the pan offset at the start
@@ -27,11 +28,12 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     const deltaX = clientX - startPos.x;
     const deltaY = clientY - startPos.y;
 
-    if (!didDrag && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
-      setDidDrag(true);
+    // Only flag as a "drag" if movement exceeds the threshold
+    if (!didDrag.current && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
+      didDrag.current = true;
     }
 
-    // Only pan if we are zoomed in AND this is an image
+    // Only pan if we are zoomed in AND it's an image
     if (isZoomed && file.type === 'image') {
       // If we are zoomed, we are panning. Prevent the whole page from scrolling.
       if (event) {
@@ -42,21 +44,25 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
         y: startPan.y + deltaY
       });
     }
-    // If NOT zoomed, we let the default swipe action (page scroll) happen.
-    // The didDrag flag is set, so it won't trigger a zoom on pointer up.
   };
 
   const handlePointerUp = () => {
-    if (!didDrag) {
+    setIsDragging(false);
+    // If we did not flag a drag, it was a "tap" or "click".
+    if (!didDrag.current) {
       if (file.type === 'image') { // Only zoom on images
         const newZoomState = !isZoomed;
         setIsZoomed(newZoomState);
         if (!newZoomState) {
-          setCurrentPan({ x: 0, y: 0 }); // Reset pan on zoom out
+          // If we just zoomed out, reset the pan
+          setCurrentPan({ x: 0, y: 0 });
         }
       }
     }
-    setIsDragging(false);
+    // After the pointer is up, reset the drag flag for the next click.
+    setTimeout(() => {
+      didDrag.current = false;
+    }, 0);
   };
 
   // --- Mouse Event Handlers ---
@@ -67,7 +73,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
 
   const handleMouseMove = (e) => {
     e.preventDefault();
-    handlePointerMove(e.clientX, e.clientY, null);
+    handlePointerMove(e.clientX, e.clientY, e);
   };
 
   // --- Touch Event Handlers ---
@@ -80,7 +86,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
   };
 
   const handleTouchMove = (e) => {
-    if (e.touches.length !== 1) return;
+    if (!isDragging || e.touches.length !== 1) return;
     // We pass the native 'e' event so we can call e.preventDefault() inside the handler
     handlePointerMove(e.touches[0].clientX, e.touches[0].clientY, e);
   };
