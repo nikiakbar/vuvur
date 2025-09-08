@@ -1,56 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
-  const [isZoomed, setIsZoomed] = useState(false);
-  const containerRef = useRef(null); 
 
   const mediaUrl = showFullSize 
     ? `/api/view/all/${encodeURIComponent(file.path)}`
     : `/api/preview/${encodeURIComponent(file.path)}`;
 
-  const toggleZoom = (e) => {
-    e.stopPropagation(); 
-    if (file.type !== 'image') {
-      return;
-    }
-
-    const newZoomState = !isZoomed;
-    setIsZoomed(newZoomState);
-
-    if (newZoomState) {
-      setTimeout(() => {
-        if (containerRef.current) {
-          const container = containerRef.current;
-          const scrollWidth = container.scrollWidth - container.clientWidth;
-          const scrollHeight = container.scrollHeight - container.clientHeight;
-          container.scrollLeft = scrollWidth / 2;
-          container.scrollTop = scrollHeight / 2;
-        }
-      }, 0);
-    }
-  };
-
-  const handleContainerClick = (e) => {
-    if (file.type === 'image') {
-      toggleZoom(e);
-    }
-  };
-
   return (
     <div className="viewer-slide">
-      <div 
-        ref={containerRef} 
-        className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
-        onClick={handleContainerClick}
-      >
+      <div className="viewer-image-container">
         {file.type === 'image' ? (
           <img 
             src={mediaUrl} 
             alt={file.path} 
-            style={{ 
-              transform: `scale(${isZoomed ? zoomLevel : 1})`,
-              pointerEvents: isZoomed ? 'auto' : 'none'
-            }}
           />
         ) : (
           <video 

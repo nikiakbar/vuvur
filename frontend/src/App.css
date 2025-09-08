@@ -354,13 +354,7 @@ body.no-scroll {
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: hidden; /* Default state clips the image */
-  cursor: zoom-in;
-}
-
-.viewer-image-container.zoomed {
-  overflow: auto; /* Allow scrolling/panning when zoomed */
-  cursor: zoom-out;
+  overflow: hidden; 
 }
 
 .viewer-image-container img {
@@ -369,15 +363,6 @@ body.no-scroll {
   object-fit: contain;
   border-radius: 4px;
   will-change: transform;
-  transition: transform 0.3s ease;
-}
-
-.viewer-image-container.zoomed img {
-  max-width: none;
-  max-height: none;
-  transition: none; /* No transition while panning */
-  cursor: default; /* Remove cursor since container has it */
-  pointer-events: none;
 }
 
 .viewer-image-container video {
