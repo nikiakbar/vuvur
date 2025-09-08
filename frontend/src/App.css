@@ -172,6 +172,13 @@ body.no-scroll {
   color: var(--text-color);
   font-size: 1rem;
 }
+.setting-warning {
+  display: block;
+  text-align: right;
+  font-size: 0.8rem;
+  font-style: italic;
+  opacity: 0.7;
+}
 .cleanup-button {
   background-color: var(--accent-color);
   color: white;
@@ -210,7 +217,7 @@ body.no-scroll {
   margin: 1rem;
 }
 
-.filter-input {
+.filter-input, .sort-select {
   padding: 0.6em;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -218,16 +225,6 @@ body.no-scroll {
   color: var(--text-color);
   font-size: 0.9rem;
 }
-
-.sort-select {
-  padding: 0.6em;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  font-size: 0.9rem;
-}
-
 .shuffle-button {
   background-color: var(--accent-color);
   color: white;
@@ -261,6 +258,7 @@ body.no-scroll {
   height: 25px;
   margin-top: 1rem;
 }
+
 
 /* --- MASONRY GALLERY STYLES --- */
 .gallery-masonry-container {
@@ -311,7 +309,7 @@ body.no-scroll {
 .lazy-image-placeholder {
   width: 100%;
   position: relative;
-  background-color: var(--card-bg); /* Placeholder background */
+  background-color: var(--card-bg);
 }
 .lazy-image {
   position: absolute;
@@ -349,29 +347,45 @@ body.no-scroll {
   justify-content: center; align-items: center;
   position: relative; box-sizing: border-box;
 }
+
 .viewer-image-container {
-  height: 100%; width: 100%;
-  display: flex; justify-content: center; align-items: center;
-  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden; /* Default state clips the image */
+  cursor: zoom-in;
 }
+
+.viewer-image-container.zoomed {
+  overflow: auto; /* Allow scrolling/panning when zoomed */
+  cursor: zoom-out;
+}
+
 .viewer-image-container img {
-  max-width: 95vw; max-height: 100vh;
+  max-width: 95vw;
+  max-height: 100vh;
   object-fit: contain;
   border-radius: 4px;
   will-change: transform;
-  cursor: zoom-in;
+  transition: transform 0.3s ease;
 }
+
+.viewer-image-container.zoomed img {
+  max-width: none;
+  max-height: none;
+  transition: none; /* No transition while panning */
+  cursor: default; /* Remove cursor since container has it */
+  pointer-events: none;
+}
+
 .viewer-image-container video {
   max-width: 95vw;
   max-height: 100vh;
   outline: none;
 }
-.viewer-image-container.zoomed { cursor: grab; }
-.viewer-image-container.zoomed.dragging { cursor: grabbing; }
-.viewer-image-container.zoomed img {
-  max-width: none; max-height: none;
-  transition: none;
-}
+
 .slide-info {
   position: absolute; bottom: 20px; left: 50%;
   transform: translateX(-50%);
@@ -496,12 +510,4 @@ body.no-scroll {
   border-radius: 1rem;
   font-size: 0.75rem;
   line-height: 1.5;
-}
-
-.setting-warning {
-  display: block;
-  text-align: right;
-  font-size: 0.8rem;
-  font-style: italic;
-  opacity: 0.7;
 }
