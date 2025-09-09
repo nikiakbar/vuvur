@@ -20,12 +20,15 @@ IMAGE_DIR = '/mnt/gallery/images'
 VIDEO_DIR = '/mnt/gallery/videos'
 LIKED_DIR = '/mnt/gallery/liked'
 DATA_DIR = '/app/data'
+
 DB_PATH = os.path.join(DATA_DIR, 'vuvur.db')
 PREVIEW_CACHE_DIR = os.path.join(DATA_DIR, 'cache_preview')
 THUMB_CACHE_DIR = os.path.join(DATA_DIR, 'cache_thumb')
 SETTINGS_PATH = os.path.join(DATA_DIR, 'settings.json')
+
 PREVIEW_MAX_WIDTH, PREVIEW_QUALITY = 800, 90
 THUMB_MAX_WIDTH, THUMB_QUALITY = 250, 80
+SCAN_INTERVAL_SECONDS = 300
 MAX_WORKERS = os.cpu_count() or 4
 VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.mkv', '.avi'}
 SCAN_STATUS = {"scanning": False, "progress": 0, "total": 0}
@@ -35,14 +38,22 @@ for path in [IMAGE_DIR, VIDEO_DIR, LIKED_DIR, DATA_DIR, PREVIEW_CACHE_DIR, THUMB
 
 # --- DATABASE SETUP ---
 def get_db():
-    db = sqlite3.connect(DB_PATH); db.row_factory = sqlite3.Row; return db
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+    return db
+
 def init_db():
     with get_db() as db:
         db.execute('''
         CREATE TABLE IF NOT EXISTS media (
-            path TEXT PRIMARY KEY, type TEXT NOT NULL, width INTEGER,
-            height INTEGER, mod_time REAL NOT NULL, exif_json TEXT
-        )''')
+            path TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            width INTEGER,
+            height INTEGER,
+            mod_time REAL NOT NULL,
+            exif_json TEXT
+        )
+        ''')
         db.execute('CREATE INDEX IF NOT EXISTS idx_mod_time ON media (mod_time)')
         db.execute('CREATE INDEX IF NOT EXISTS idx_type ON media (type)')
         db.commit()
@@ -52,6 +63,7 @@ def get_media_type(filename):
     return 'video' if os.path.splitext(filename)[1].lower() in VIDEO_EXTENSIONS else 'image'
 def get_source_dir(media_type):
     return VIDEO_DIR if media_type == 'video' else IMAGE_DIR
+
 def get_exif_for_file(img_path):
     try:
         img = Image.open(img_path)
@@ -95,18 +107,25 @@ def scan_and_cache_files():
     if SCAN_STATUS["scanning"]: return
     SCAN_STATUS = {"scanning": True, "progress": 0, "total": 0}
     print(f"Starting parallel media index scan with {MAX_WORKERS} workers...")
+    
     init_db() 
+
     paths = [os.path.join(root, f) for d in [IMAGE_DIR, VIDEO_DIR] for root, _, files in os.walk(d) for f in files]
     SCAN_STATUS["total"] = len(paths)
     media_data = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         results = executor.map(process_file, paths)
         media_data = [res for res in results if res is not None]
+
     print(f"Indexing {len(media_data)} items into database...")
     with get_db() as db:
         db.execute("DELETE FROM media") 
-        db.executemany("INSERT OR REPLACE INTO media (path, type, width, height, mod_time, exif_json) VALUES (?, ?, ?, ?, ?, ?)", media_data)
+        db.executemany(
+            "INSERT OR REPLACE INTO media (path, type, width, height, mod_time, exif_json) VALUES (?, ?, ?, ?, ?, ?)",
+            media_data
+        )
         db.commit()
+    
     SCAN_STATUS = {"scanning": False, "progress": SCAN_STATUS["total"], "total": SCAN_STATUS["total"]}
     print(f"Scan complete. Indexed {len(media_data)} media files.")
 
@@ -157,7 +176,6 @@ def background_scanner_task():
         except Exception as e:
             print(f"Error in background scanner check: {e}")
 
-        # --- CONSOLIDATED SLEEP LOGIC ---
         try:
             settings = load_settings()
             scan_interval = settings.get('scan_interval', 3600)
@@ -286,6 +304,45 @@ def random_files():
                     "exif": json.loads(exif_string)
                 })
         return jsonify(items)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/random-single')
+def random_single_file():
+    """Returns one random file, filtered by an optional query string."""
+    query = request.args.get('q', '').lower()
+    if not os.path.exists(DB_PATH): 
+        return jsonify({"error": "Database not built yet."}), 503
+
+    try:
+        init_db()
+        sql_query = "SELECT path, type, width, height, mod_time, exif_json FROM media"
+        params = []
+
+        if query:
+            sql_query += " WHERE (path LIKE ? OR exif_json LIKE ?)"
+            params.append(f"%{query}%")
+            params.append(f"%{query}%")
+        
+        sql_query += " ORDER BY RANDOM() LIMIT 1"
+
+        with get_db() as db:
+            result = db.execute(sql_query, params).fetchone()
+
+        if result:
+            exif_string = result['exif_json'] or '{}'
+            item = {
+                "path": result['path'],
+                "type": result['type'],
+                "width": result['width'],
+                "height": result['height'],
+                "mod_time": result['mod_time'],
+                "exif": json.loads(exif_string)
+            }
+            return jsonify(item)
+        else:
+            return jsonify({"error": "No media found matching query."}), 404
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
