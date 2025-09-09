@@ -4,9 +4,9 @@ import Header from './components/Header';
 import GalleryPage from './pages/GalleryPage';
 import SettingsPage from './pages/SettingsPage';
 import RandomPage from './pages/RandomPage';
+import SearchPage from './pages/SearchPage';
 
 function getInitialSetting(envVarName, storageKey, defaultValue) {
-  // Add a safety check for window.env and the property
   const envValue = (window.env && window.env[envVarName]) ? window.env[envVarName] : "";
 
   if (envValue && envValue !== "") {
