@@ -1,15 +1,14 @@
 name: Build and Push Docker Images
 
 on:
-  # push:
-  #   branches: [ "main", "dev" ]
+  push:
+    branches: [ "main", "dev" ]
   workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
-    # Define the matrix strategy
     strategy:
       matrix:
         include:
@@ -44,7 +43,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # This single step now runs in parallel for each item in the matrix
       - name: Build and push ${{ matrix.service }} image
         if: steps.set_suffix.outputs.tag_suffix != ''
         uses: docker/build-push-action@v5
@@ -53,3 +51,18 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
+
+  trigger-update:
+      name: Trigger Deployment Update
+      needs: build-and-push
+      runs-on: self-hosted
+      if: github.ref_name == 'main' || github.ref_name == 'dev'
+
+      steps:
+        - name: Run Watchtower to pull new images
+          run: |
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              containrrr/watchtower \
+              --cleanup --remove-volumes --run-once \
+              vuvur-dev-api-1 vuvur-dev-portal-1
