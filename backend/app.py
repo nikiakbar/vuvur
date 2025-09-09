@@ -316,13 +316,17 @@ def random_single_file():
         init_db()
         sql_query = "SELECT path, type, width, height, mod_time, exif_json FROM media"
         params = []
+
         if query:
-            sql_query += " WHERE (path LIKE ? OR exif_json LIKE ?)"
+            sql_query += " WHERE (LOWER(path) LIKE ? OR LOWER(exif_json) LIKE ?)"
             params.append(f"%{query}%")
             params.append(f"%{query}%")
+        
         sql_query += " ORDER BY RANDOM() LIMIT 1"
+
         with get_db() as db:
             result = db.execute(sql_query, params).fetchone()
+
         if result:
             exif_string = result['exif_json'] or '{}'
             item = {
@@ -330,15 +334,17 @@ def random_single_file():
                 "height": result['height'], "mod_time": result['mod_time'],
                 "exif": json.loads(exif_string)
             }
-            return jsonify(item)
+            return jsonify([item])
         else:
-            return jsonify({"error": "No media found matching query."}), 404
+            return jsonify([])
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/thumbnail/<path:filename>')
 def serve_thumbnail(filename):
     return generate_and_serve_cached_media(filename, THUMB_CACHE_DIR, THUMB_MAX_WIDTH, THUMB_QUALITY)
+
 @app.route('/api/preview/<path:filename>')
 def serve_preview_image(filename):
     return generate_and_serve_cached_media(filename, PREVIEW_CACHE_DIR, PREVIEW_MAX_WIDTH, PREVIEW_QUALITY)

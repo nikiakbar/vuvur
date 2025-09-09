@@ -5,6 +5,7 @@ import GalleryPage from './pages/GalleryPage';
 import SettingsPage from './pages/SettingsPage';
 import RandomPage from './pages/RandomPage';
 import RandomResultPage from './pages/RandomResultPage';
+import SearchPage from './pages/SearchPage';
 
 function getInitialSetting(envVarName, storageKey, defaultValue) {
   const envValue = (window.env && window.env[envVarName]) ? window.env[envVarName] : "";
@@ -108,6 +109,10 @@ function App() {
               preloadCount={preloadCountSetting.value} 
               zoomLevel={zoomLevelSetting.value}
             />} 
+          />
+          <Route 
+            path="/search"
+            element={<SearchPage />}
           />
           <Route 
             path="/random-result"

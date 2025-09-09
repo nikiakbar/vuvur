@@ -1,18 +1,10 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 function Header({ currentTheme, toggleTheme }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const navigate = useNavigate();
 
   const closeMenu = () => setIsMenuOpen(false);
-
-  const handleSearchClick = () => {
-    const query = window.prompt("Enter a search query (filename or EXIF). Leave blank for any random media:");
-    if (query !== null) {
-      navigate(`/random-result?q=${encodeURIComponent(query)}`);
-    }
-  };
 
   return (
     <header className="app-header">
@@ -30,9 +22,9 @@ function Header({ currentTheme, toggleTheme }) {
         <Link to="/random" className="header-action-button">
           Random
         </Link>
-        <button onClick={handleSearchClick} className="header-action-button secondary">
+        <Link to="/search" className="header-action-button secondary">
           Search
-        </button>
+        </Link>
         <div className="menu-container">
           <button className="hamburger-button" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             ☰
