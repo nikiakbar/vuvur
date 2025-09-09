@@ -59,49 +59,53 @@ jobs:
   deploy-local:
       name: Trigger Deployment Update for Local
       needs: build-and-push
-      runs-on: 
-        - self-hosted
+      # runs-on: 
+      #   - self-hosted
+      runs-on: ubuntu-latest
       if: github.ref_name == 'main' || github.ref_name == 'dev'
 
       steps:
         - name: Run Watchtower to pull new images
           run: |
-            if [ "${{ github.ref_name }}" == "main" ]; then
-              CONTAINER_NAMES="vuvur-prod-api-1 vuvur-prod-portal-1"
-            elif [ "${{ github.ref_name }}" == "dev" ]; then
-              CONTAINER_NAMES="vuvur-dev-api-1 vuvur-dev-portal-1"
-            else
-              echo "Branch is not main or dev. Skipping."
-              exit 0
-            fi
+            # if [ "${{ github.ref_name }}" == "main" ]; then
+            #   CONTAINER_NAMES="vuvur-prod-api-1 vuvur-prod-portal-1"
+            # elif [ "${{ github.ref_name }}" == "dev" ]; then
+            #   CONTAINER_NAMES="vuvur-dev-api-1 vuvur-dev-portal-1"
+            # else
+            #   echo "Branch is not main or dev. Skipping."
+            #   exit 0
+            # fi
             
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              containrrr/watchtower \
-              --cleanup --remove-volumes --run-once \
-              $CONTAINER_NAMES
+            # docker run --rm \
+            #   -v /var/run/docker.sock:/var/run/docker.sock \
+            #   containrrr/watchtower \
+            #   --cleanup --remove-volumes --run-once \
+            #   $CONTAINER_NAMES
+            curl -H "Authorization: Bearer ${{ secrets.HOMETOWER_TOKEN }}" https://hometower.nikiakbar.com/v1/update
 
   deploy-cloud:
       name: Trigger Deployment Update for Cloud
       needs: build-and-push
-      runs-on:
-        - cloud
+      runs-on: ubuntu-latest
+      # runs-on:
+      #   - cloud
       if: github.ref_name == 'main' || github.ref_name == 'dev'
 
       steps:
         - name: Run Watchtower to pull new images
           run: |
-            if [ "${{ github.ref_name }}" == "main" ]; then
-              CONTAINER_NAMES="vuvur-prod-api-1 vuvur-prod-portal-1"
-            elif [ "${{ github.ref_name }}" == "dev" ]; then
-              CONTAINER_NAMES="vuvur-dev-api-1 vuvur-dev-portal-1"
-            else
-              echo "Branch is not main or dev. Skipping."
-              exit 0
-            fi
+            # if [ "${{ github.ref_name }}" == "main" ]; then
+            #   CONTAINER_NAMES="vuvur-prod-api-1 vuvur-prod-portal-1"
+            # elif [ "${{ github.ref_name }}" == "dev" ]; then
+            #   CONTAINER_NAMES="vuvur-dev-api-1 vuvur-dev-portal-1"
+            # else
+            #   echo "Branch is not main or dev. Skipping."
+            #   exit 0
+            # fi
             
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              containrrr/watchtower \
-              --cleanup --remove-volumes --run-once \
-              $CONTAINER_NAMES
+            # docker run --rm \
+            #   -v /var/run/docker.sock:/var/run/docker.sock \
+            #   containrrr/watchtower \
+            #   --cleanup --remove-volumes --run-once \
+            #   $CONTAINER_NAMES
+            curl -H "Authorization: Bearer ${{ secrets.HOMETOWER_TOKEN }}" https://cloudtower.nikiakbar.com/v1/update
