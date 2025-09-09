@@ -245,20 +245,38 @@ def list_files():
         query = request.args.get('q', '').lower()
         
         params = []
-        sql_query = "SELECT path, type, width, height, mod_time, exif_json FROM media"
+        base_query = "SELECT path, type, width, height, mod_time, exif_json FROM media"
         
         if query:
-            sql_query += " WHERE (LOWER(path) LIKE ? OR LOWER(exif_json) LIKE ?)"
+            base_query += " WHERE (LOWER(path) LIKE ? OR LOWER(exif_json) LIKE ?)"
             params.append(f"%{query}%")
             params.append(f"%{query}%")
 
+        if sort_by == 'random':
+            sql_query = f"{base_query} ORDER BY RANDOM() LIMIT 100"
+            with get_db() as db:
+                results = db.execute(sql_query, params).fetchall()
+            items = [dict(row, exif=json.loads(row.pop('exif_json') or '{}')) for row in results]
+            return jsonify({
+                "total_items": len(items),
+                "page": 1,
+                "total_pages": 1,
+                "items": items
+            })
+        
         with get_db() as db:
-            total_count_result = db.execute(f"SELECT COUNT(1) FROM ({sql_query}) AS base_query", params).fetchone()
+            count_query = f"SELECT COUNT(1) FROM ({base_query}) AS base_query"
+            total_count_result = db.execute(count_query, params).fetchone()
             total_count = total_count_result[0] if total_count_result else 0
         
-        sort_map = {'date_desc': 'mod_time DESC', 'date_asc': 'mod_time ASC', 'file_asc': 'path ASC', 'file_desc': 'path DESC', 'random': 'RANDOM()'}
-        order_by = sort_map.get(sort_by, 'RANDOM()')
-        sql_query += f" ORDER BY {order_by} LIMIT ? OFFSET ?"
+        sort_map = {
+            'date_desc': 'mod_time DESC',
+            'date_asc': 'mod_time ASC',
+            'file_asc': 'path ASC',
+            'file_desc': 'path DESC',
+        }
+        order_by = sort_map.get(sort_by, 'mod_time DESC')
+        sql_query = f"{base_query} ORDER BY {order_by} LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         
         with get_db() as db:
@@ -274,7 +292,13 @@ def list_files():
                     "mod_time": row['mod_time'],
                     "exif": json.loads(exif_string)
                 })
-        return jsonify({"total_items": total_count, "page": page, "total_pages": (total_count // limit) + 1, "items": items})
+        
+        return jsonify({
+            "total_items": total_count,
+            "page": page,
+            "total_pages": (total_count // limit) + 1 if limit > 0 else 1,
+            "items": items
+        })
     except Exception as e:
         print(f"Error in list_files: {e}")
         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
