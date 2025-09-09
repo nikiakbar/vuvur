@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import MediaSlide from '../components/MediaSlide';
+import { useSearchParams, Link } from 'react-router-dom';
 
-function RandomResultPage({ showFullSize, zoomLevel }) {
+function RandomResultPage() {
   const [media, setMedia] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -10,7 +9,6 @@ function RandomResultPage({ showFullSize, zoomLevel }) {
   const query = searchParams.get('q') || '';
 
   useEffect(() => {
-    // This effect runs whenever the query in the URL changes
     const fetchMedia = async () => {
       setIsLoading(true);
       setError('');
@@ -30,9 +28,8 @@ function RandomResultPage({ showFullSize, zoomLevel }) {
     };
     
     fetchMedia();
-  }, [query]); // Re-fetch if the URL query changes
+  }, [query]);
 
-  // Add the 'no-scroll' class to the body
   useEffect(() => {
     document.body.classList.add('no-scroll');
     return () => {
@@ -40,29 +37,27 @@ function RandomResultPage({ showFullSize, zoomLevel }) {
     };
   }, []);
 
-  if (isLoading) {
-    return <div className="loading-fullscreen">Searching...</div>;
-  }
+  // Use a different container class for simpler styling
+  const containerClass = media?.type === 'video' ? 'result-video-container' : 'result-image-container';
 
-  if (error) {
-    return <div className="loading-fullscreen">{error}</div>;
-  }
-
-  if (!media) {
-    return <div className="loading-fullscreen">No media found.</div>;
-  }
-
-  // Render just the fullscreen media slide, with no controls
   return (
-    <div className="viewer-overlay standalone-page fullscreen">
-      <div className="viewer-slide">
-        <MediaSlide
-          file={media}
-          showControls={false}
-          showFullSize={true} // Always show full/preview size
-          zoomLevel={zoomLevel}
-        />
-      </div>
+    <div className="fullscreen-result-page">
+      <Link to="/search" className="close-button standalone-close-button" title="Back to Search">
+        &times;
+      </Link>
+      
+      {isLoading && <div className="loading-fullscreen">Searching...</div>}
+      {error && <div className="loading-fullscreen">{error} <Link to="/search" className="inline-link">Try another search?</Link></div>}
+      
+      {media && (
+        <div className={containerClass}>
+          {media.type === 'image' ? (
+            <img src={`/api/view/all/${encodeURIComponent(media.path)}`} alt={media.path} />
+          ) : (
+            <video src={`/api/view/all/${encodeURIComponent(media.path)}`} controls autoPlay loop />
+          )}
+        </div>
+      )}
     </div>
   );
 }
