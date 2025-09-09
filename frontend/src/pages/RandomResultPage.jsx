@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
-function RandomResultPage() {
+function RandomResultPage({ showFullSize, zoomLevel }) {
   const [media, setMedia] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,15 +37,10 @@ function RandomResultPage() {
     };
   }, []);
 
-  // Use a different container class for simpler styling
   const containerClass = media?.type === 'video' ? 'result-video-container' : 'result-image-container';
 
   return (
     <div className="fullscreen-result-page">
-      <Link to="/search" className="close-button standalone-close-button" title="Back to Search">
-        &times;
-      </Link>
-      
       {isLoading && <div className="loading-fullscreen">Searching...</div>}
       {error && <div className="loading-fullscreen">{error} <Link to="/search" className="inline-link">Try another search?</Link></div>}
       
