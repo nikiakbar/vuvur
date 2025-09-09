@@ -57,7 +57,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
 
   deploy-local:
-      name: Trigger Deployment Update
+      name: Trigger Deployment Update for Local
       needs: build-and-push
       runs-on: 
         - self-hosted
@@ -82,7 +82,7 @@ jobs:
               $CONTAINER_NAMES
 
   deploy-cloud:
-      name: Trigger Deployment Update
+      name: Trigger Deployment Update for Cloud
       needs: build-and-push
       runs-on:
         - cloud
