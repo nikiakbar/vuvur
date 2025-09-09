@@ -52,7 +52,7 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
 
-  trigger-update:
+  deploy-local:
       name: Trigger Deployment Update
       needs: build-and-push
       runs-on: 
@@ -62,13 +62,22 @@ jobs:
       steps:
         - name: Run Watchtower to pull new images
           run: |
+            if [ "${{ github.ref_name }}" == "main" ]; then
+              CONTAINER_NAMES="vuvur-prod-api-1 vuvur-prod-portal-1"
+            elif [ "${{ github.ref_name }}" == "dev" ]; then
+              CONTAINER_NAMES="vuvur-dev-api-1 vuvur-dev-portal-1"
+            else
+              echo "Branch is not main or dev. Skipping."
+              exit 0
+            fi
+            
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
               containrrr/watchtower \
               --cleanup --remove-volumes --run-once \
-              vuvur-dev-api-1 vuvur-dev-portal-1
+              $CONTAINER_NAMES
 
-  trigger-update-cloud:
+  deploy-cloud:
       name: Trigger Deployment Update
       needs: build-and-push
       runs-on:
@@ -78,8 +87,17 @@ jobs:
       steps:
         - name: Run Watchtower to pull new images
           run: |
+            if [ "${{ github.ref_name }}" == "main" ]; then
+              CONTAINER_NAMES="vuvur-prod-api-1 vuvur-prod-portal-1"
+            elif [ "${{ github.ref_name }}" == "dev" ]; then
+              CONTAINER_NAMES="vuvur-dev-api-1 vuvur-dev-portal-1"
+            else
+              echo "Branch is not main or dev. Skipping."
+              exit 0
+            fi
+            
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
               containrrr/watchtower \
               --cleanup --remove-volumes --run-once \
-              vuvur-dev-api-1 vuvur-dev-portal-1
+              $CONTAINER_NAMES
