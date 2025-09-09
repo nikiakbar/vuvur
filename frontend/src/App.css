@@ -102,6 +102,14 @@ body.no-scroll {
   background-color: var(--accent-hover);
   color: white;
 }
+.header-action-button.secondary {
+  background-color: var(--card-bg);
+  color: var(--accent-color);
+  border: 1px solid var(--accent-color);
+}
+.header-action-button.secondary:hover {
+  background-color: rgba(128, 128, 128, 0.1);
+}
 .hamburger-button {
   background: none;
   border: none;
@@ -259,20 +267,12 @@ body.no-scroll {
   margin-top: 1rem;
 }
 
-
-/* --- NEW REACT-MASONRY-CSS STYLES --- */
-/* Remove the old column-count styles */
-.gallery-masonry-container {
-  display: none; /* Hide the old class if it's still being rendered */
-}
-
-/* These are the new styles for the library */
+/* --- MASONRY GALLERY STYLES --- */
 .gallery-masonry-grid {
   display: flex;
   width: 100%;
 }
 .gallery-masonry-column {
-  /* This library handles the column logic, so no specific styling needed here */
   background-clip: padding-box;
 }
 .gallery-item {
@@ -280,12 +280,8 @@ body.no-scroll {
   overflow: hidden;
   cursor: pointer;
   width: 100%;
-  /* We add a small gap by putting margin-bottom on the item */
-  /* This is better than column-gap for this library */
-  margin-bottom: 0px; /* Set to 0 for no gap */
+  margin-bottom: 0px;
 }
-/* --- END NEW MASONRY STYLES --- */
-
 .image-dimension-overlay {
   position: absolute;
   bottom: 0;
@@ -357,13 +353,9 @@ body.no-scroll {
   justify-content: center; align-items: center;
   position: relative; box-sizing: border-box;
 }
-
 .viewer-image-container {
-  height: 100%;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  height: 100%; width: 100%;
+  display: flex; justify-content: center; align-items: center;
   overflow: hidden; 
 }
 .viewer-image-container.zoomed {
@@ -379,8 +371,7 @@ body.no-scroll {
   cursor: zoom-in;
 }
 .viewer-image-container.zoomed img {
-  max-width: none;
-  max-height: none;
+  max-width: none; max-height: none;
   transition: none;
   cursor: default;
   pointer-events: auto;
@@ -434,14 +425,27 @@ body.no-scroll {
 }
 .close-button:hover { transform: scale(1.1); }
 
-/* --- FULLSCREEN RANDOM PAGE STYLES --- */
-.viewer-overlay.standalone-page {
+/* --- FULLSCREEN & SEARCH RESULT STYLES --- */
+.viewer-overlay.standalone-page, .fullscreen-result-page {
   position: fixed; top: 0; left: 0;
   width: 100vw; height: 100vh;
   background-color: #000;
   z-index: 2000;
   -webkit-backdrop-filter: none; backdrop-filter: none;
   animation: none;
+}
+.fullscreen-result-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.result-image-container, .result-video-container {
+  width: 100%; height: 100%;
+  display: flex; justify-content: center; align-items: center;
+}
+.result-image-container img, .result-video-container video {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
 }
 .standalone-close-button { background-color: rgba(0, 0, 0, 0.5); }
 .loading-fullscreen {
@@ -462,6 +466,24 @@ body.no-scroll {
   z-index: 2002;
 }
 @keyframes spin { to { transform: translateX(-50%) rotate(360deg); } }
+.loading-spinner-inline {
+  width: 40px; height: 40px;
+  border: 4px solid var(--border-color);
+  border-radius: 50%;
+  border-top-color: var(--accent-color);
+  animation: spin-alt 1s ease-in-out infinite;
+}
+@keyframes spin-alt { to { transform: rotate(360deg); } }
+.search-page-container {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 1.5rem;
+}
+.search-controls {
+  display: flex; gap: 1rem;
+  align-items: center;
+}
+.search-tip { font-size: 0.9rem; opacity: 0.7; }
+.inline-link { color: var(--accent-color); text-decoration: underline; margin-left: 0.5rem; }
 
 /* --- EXIF DISPLAY STYLES --- */
 .exif-overlay {
@@ -514,94 +536,4 @@ body.no-scroll {
   border-radius: 1rem;
   font-size: 0.75rem;
   line-height: 1.5;
-}
-
-.header-action-button.secondary {
-  background-color: var(--card-bg);
-  color: var(--accent-color);
-  border: 1px solid var(--accent-color);
-}
-.header-action-button.secondary:hover {
-  background-color: rgba(128, 128, 128, 0.1);
-}
-
-.search-result-container {
-  width: 100%;
-  max-width: 800px;
-  height: 600px;
-  background-color: #000;
-  border-radius: 8px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.search-result-item {
-  width: 100%;
-  height: 100%;
-}
-
-.search-result-item .viewer-slide {
-  height: 100%;
-  width: 100%;
-}
-
-.search-error {
-  color: #ff8a8a;
-}
-
-.loading-spinner-inline {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--border-color);
-  border-radius: 50%;
-  border-top-color: var(--accent-color);
-  animation: spin 1s ease-in-out infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.search-tip {
-  font-size: 0.9rem;
-  opacity: 0.7;
-}
-
-.inline-link {
-  color: var(--accent-color);
-  text-decoration: underline;
-  margin-left: 0.5rem;
-}
-
-.fullscreen-result-page {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: #000;
-  z-index: 2000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.result-image-container,
-.result-video-container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.result-image-container img,
-.result-video-container video {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
 }

@@ -8,7 +8,6 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
     return <p>No media found. Check your filters or wait for the scan to complete.</p>;
   }
 
-  // Define the number of columns at different browser widths
   const breakpointColumnsObj = {
     default: 5,
     1400: 4,

@@ -49,21 +49,12 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     setTimeout(() => { didDrag.current = false; }, 0);
   };
 
-  const handleMouseDown = (e) => {
-    e.preventDefault();
-    handlePointerDown(e.clientX, e.clientY);
-  };
-
-  const handleMouseMove = (e) => {
-    e.preventDefault();
-    handlePointerMove(e.clientX, e.clientY, e);
-  };
-
+  const handleMouseDown = (e) => { e.preventDefault(); handlePointerDown(e.clientX, e.clientY); };
+  const handleMouseMove = (e) => { e.preventDefault(); handlePointerMove(e.clientX, e.clientY, e); };
   const handleTouchStart = (e) => {
     if (e.touches.length !== 1) { setIsDragging(false); return; }
     handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
   };
-
   const handleTouchMove = (e) => {
     if (!isDragging || e.touches.length !== 1) return;
     handlePointerMove(e.touches[0].clientX, e.touches[0].clientY, e);

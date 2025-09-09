@@ -359,13 +359,18 @@ def generate_and_serve_cached_media(filename, cache_dir, max_width, quality):
                 if img.mode in ("RGBA", "P"): img = img.convert("RGB")
                 img.save(cache_path, 'JPEG', quality=quality)
         elif media_type == 'video':
-            subprocess.run([
+            result = subprocess.run([
                 'ffmpeg', '-i', source_path, '-ss', '00:00:01.000', '-vframes', '1',
                 '-vf', f'scale={max_width}:-1', cache_path
-            ], check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            ], capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"--- FFmpeg Error for {filename} ---")
+                print(result.stderr)
+                print("------------------------------------")
+                abort(500)
         return send_from_directory(cache_dir, filename)
     except Exception as e:
-        print(f"Error generating thumbnail for {filename}: {e}"); abort(500)
+        print(f"Error generating media for {filename}: {e}"); abort(500)
 
 @app.route('/api/view/all/<path:filename>')
 def serve_full_file(filename):
