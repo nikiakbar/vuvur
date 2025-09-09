@@ -1,16 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import MediaSlide from '../components/MediaSlide';
-import { useSettings } from '../contexts/SettingsContext';
 
-function RandomPage({ showFullSize }) {
-  const { settings } = useSettings();
-  
-  // --- FIX ---
-  // Use optional chaining and defaults in case settings are null
-  const preloadCount = settings?.preload_count || 3;
-  const zoomLevel = settings?.zoom_level || 2.5;
-
+function RandomPage({ showFullSize, preloadCount, zoomLevel }) {
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const observer = useRef();
@@ -25,8 +17,11 @@ function RandomPage({ showFullSize }) {
       if (data.length > 0) {
         setFiles(prevFiles => [...prevFiles, ...data]);
       }
-    } catch (error) { console.error("Failed to fetch random file:", error); } 
-    finally { setIsLoading(false); }
+    } catch (error) {
+      console.error("Failed to fetch random file:", error);
+    } finally {
+      setIsLoading(false);
+    }
   }, [isLoading]);
   
   const lastImageElementRef = useCallback(node => {
@@ -43,30 +38,41 @@ function RandomPage({ showFullSize }) {
   useEffect(() => {
     document.body.classList.add('no-scroll');
     loadNextImages(1 + preloadCount);
-    return () => { document.body.classList.remove('no-scroll') };
+    return () => {
+      document.body.classList.remove('no-scroll');
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
-  if (files.length === 0 && isLoading) { return <div className="loading-fullscreen">Loading...</div> }
-  if (files.length === 0 && !isLoading) { return <div className="loading-fullscreen">No media found.</div> }
+  if (files.length === 0 && isLoading) {
+    return <div className="loading-fullscreen">Loading...</div>;
+  }
+  if (files.length === 0 && !isLoading) {
+    return <div className="loading-fullscreen">No media found.</div>;
+  }
 
   return (
     <div className="viewer-overlay standalone-page fullscreen">
       <Link to="/" className="close-button standalone-close-button" title="Back to Gallery">&times;</Link>
+      
       {files.map((file, index) => {
         const isLastElement = index === files.length - 1;
         return (
-          <div ref={isLastElement ? lastImageElementRef : null} key={`${file.path}-${index}`} className="viewer-slide">
+          <div 
+            ref={isLastElement ? lastImageElementRef : null} 
+            key={`${file.path}-${index}`} 
+            className="viewer-slide"
+          >
             <MediaSlide 
               file={file} 
               showControls={false} 
               showFullSize={true} 
-              zoomLevel={zoomLevel} 
+              zoomLevel={zoomLevel}
             />
           </div>
         );
       })}
-      {isLoading && <div className="loading-spinner"></div>}
+      {isLoading && files.length > 0 && <div className="loading-spinner"></div>}
     </div>
   );
 }

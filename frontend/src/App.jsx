@@ -4,7 +4,7 @@ import Header from './components/Header';
 import GalleryPage from './pages/GalleryPage';
 import SettingsPage from './pages/SettingsPage';
 import RandomPage from './pages/RandomPage';
-import SearchPage from './pages/SearchPage';
+import RandomResultPage from './pages/RandomResultPage';
 
 function getInitialSetting(envVarName, storageKey, defaultValue) {
   const envValue = (window.env && window.env[envVarName]) ? window.env[envVarName] : "";
@@ -21,7 +21,6 @@ function getInitialSetting(envVarName, storageKey, defaultValue) {
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  
   const [batchSizeSetting, setBatchSizeSetting] = useState(
     getInitialSetting('GALLERY_BATCH_SIZE', 'batchSize', 20)
   );
@@ -71,13 +70,13 @@ function App() {
   };
 
   const location = useLocation();
-  const isRandomPage = location.pathname === '/random';
+  const isFullscreen = location.pathname === '/random' || location.pathname === '/random-result';
 
   return (
     <div className="app-container">
-      {!isRandomPage && <Header currentTheme={theme} toggleTheme={toggleTheme} />}
+      {!isFullscreen && <Header currentTheme={theme} toggleTheme={toggleTheme} />}
       
-      <main className={!isRandomPage ? "main-content" : "main-content-full"}>
+      <main className={!isFullscreen ? "main-content" : "main-content-full"}>
         <Routes>
           <Route 
             path="/" 
@@ -111,8 +110,8 @@ function App() {
             />} 
           />
           <Route 
-            path="/search"
-            element={<SearchPage
+            path="/random-result"
+            element={<RandomResultPage
               showFullSize={showFullSize}
               zoomLevel={zoomLevelSetting.value}
             />}
