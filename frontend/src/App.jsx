@@ -4,10 +4,11 @@ import Header from './components/Header';
 import GalleryPage from './pages/GalleryPage';
 import SettingsPage from './pages/SettingsPage';
 import RandomPage from './pages/RandomPage';
-import SearchPage from './pages/SearchPage';
 
 function getInitialSetting(envVarName, storageKey, defaultValue) {
-  const envValue = window.env[envVarName];
+  // Add a safety check for window.env and the property
+  const envValue = (window.env && window.env[envVarName]) ? window.env[envVarName] : "";
+
   if (envValue && envValue !== "") {
     return { value: parseFloat(envValue), isLocked: true };
   }
@@ -20,6 +21,7 @@ function getInitialSetting(envVarName, storageKey, defaultValue) {
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  
   const [batchSizeSetting, setBatchSizeSetting] = useState(
     getInitialSetting('GALLERY_BATCH_SIZE', 'batchSize', 20)
   );
