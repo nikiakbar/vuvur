@@ -55,7 +55,8 @@ jobs:
   trigger-update:
       name: Trigger Deployment Update
       needs: build-and-push
-      runs-on: self-hosted
+      runs-on: 
+        - self-hosted
       if: github.ref_name == 'main' || github.ref_name == 'dev'
 
       steps:
@@ -71,7 +72,6 @@ jobs:
       name: Trigger Deployment Update
       needs: build-and-push
       runs-on:
-        - self-hosted
         - cloud
       if: github.ref_name == 'main' || github.ref_name == 'dev'
 
