@@ -1,22 +1,64 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
+  const [isZoomed, setIsZoomed] = useState(false);
+  const containerRef = useRef(null);
 
-  const mediaUrl = showFullSize 
+  const toggleZoom = (e) => {
+    e.stopPropagation(); 
+    if (file.type !== 'image') {
+      return;
+    }
+
+    const newZoomState = !isZoomed;
+    setIsZoomed(newZoomState);
+
+    if (newZoomState) {
+      setTimeout(() => {
+        if (containerRef.current) {
+          const container = containerRef.current;
+          const scrollWidth = container.scrollWidth - container.clientWidth;
+          const scrollHeight = container.scrollHeight - container.clientHeight;
+          container.scrollLeft = scrollWidth / 2;
+          container.scrollTop = scrollHeight / 2;
+        }
+      }, 0);
+    }
+  };
+
+  const handleContainerClick = (e) => {
+    if (file.type === 'image') {
+      toggleZoom(e);
+    }
+  };
+
+  // Create two separate URL paths
+  const imageUrl = showFullSize 
     ? `/api/view/all/${encodeURIComponent(file.path)}`
     : `/api/preview/${encodeURIComponent(file.path)}`;
+    
+  // Videos MUST always use the full 'view' endpoint to be playable
+  const videoUrl = `/api/view/all/${encodeURIComponent(file.path)}`;
 
   return (
     <div className="viewer-slide">
-      <div className="viewer-image-container">
+      <div 
+        ref={containerRef} 
+        className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
+        onClick={handleContainerClick}
+      >
         {file.type === 'image' ? (
           <img 
-            src={mediaUrl} 
+            src={imageUrl} 
             alt={file.path} 
+            style={{ 
+              transform: `scale(${isZoomed ? zoomLevel : 1})`,
+              pointerEvents: isZoomed ? 'auto' : 'none'
+            }}
           />
         ) : (
           <video 
-            src={mediaUrl} 
+            src={videoUrl} 
             controls 
             autoPlay 
             muted 
