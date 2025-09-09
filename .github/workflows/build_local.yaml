@@ -54,17 +54,17 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
 
-trigger-update:
-    name: Trigger Deployment Update
-    needs: build-and-push
-    runs-on: self-hosted
-    if: github.ref_name == 'main' || github.ref_name == 'dev'
+  trigger-update:
+      name: Trigger Deployment Update
+      needs: build-and-push
+      runs-on: self-hosted
+      if: github.ref_name == 'main' || github.ref_name == 'dev'
 
-    steps:
-      - name: Run Watchtower to pull new images
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            containrrr/watchtower \
-            --run-once \
-            --label-enable
+      steps:
+        - name: Run Watchtower to pull new images
+          run: |
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              containrrr/watchtower \
+              --run-once \
+              --label-enable
