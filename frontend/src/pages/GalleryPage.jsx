@@ -12,22 +12,18 @@ function GalleryPage() {
 
   const [files, setFiles] = useState([]);
   const [scanStatus, setScanStatus] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(batchSize);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [showFullSize, setShowFullSize] = useState(false);
   
-  // --- Simplified State: Only one query ---
   const [sortBy, setSortBy] = useState('random');
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 500);
   
-  const observer = useRef();
-  
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => { setVisibleCount(batchSize) }, [batchSize]);
+  
+  const observer = useRef();
 
   const lastImageElementRef = useCallback(node => {
     if (isLoading) return;
@@ -40,37 +36,60 @@ function GalleryPage() {
     if (node) observer.current.observe(node);
   }, [isLoading, page, totalPages]);
 
-  const fetchFiles = useCallback(async (isNewSearch = false) => {
-    setIsLoading(true);
-    try {
-      const currentPage = isNewSearch ? 1 : page;
-      const params = new URLSearchParams({
-        sort: sortBy,
-        q: debouncedQuery, // Use the single debounced query
-        page: currentPage,
-        limit: batchSize
-      });
-      const url = `/api/files?${params.toString()}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      if (data.items && Array.isArray(data.items)) {
-        setFiles(prevFiles => (isNewSearch ? data.items : [...prevFiles, ...data.items]));
-        setTotalPages(data.total_pages);
-        setScanStatus({ status: 'complete' });
-      } else if (data.status === 'scanning') {
-        setScanStatus(data);
+  // Effect to reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [sortBy, debouncedQuery]);
+  
+  // This is now the single, main effect for ALL data fetching.
+  useEffect(() => {
+    const fetchData = async () => {
+      const isNewSearch = page === 1;
+      setIsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          sort: sortBy,
+          q: debouncedQuery,
+          page: page,
+          limit: batchSize
+        });
+        const url = `/api/files?${params.toString()}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.items && Array.isArray(data.items)) {
+          setFiles(prev => isNewSearch ? data.items : [...prev, ...data.items]);
+          setTotalPages(data.total_pages);
+          setScanStatus({ status: 'complete' });
+        } else if (data.status === 'scanning') {
+          setScanStatus(data);
+          setFiles([]);
+        } else {
+          setFiles([]);
+        }
+      } catch (error) {
         setFiles([]);
-      } else {
-        setFiles([]);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      setFiles([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sortBy, debouncedQuery, page, batchSize]);
+    };
+    
+    // Check scan status before fetching
+    const checkStatusAndFetch = async () => {
+        const res = await fetch('/api/scan-status');
+        const data = await res.json();
+        setScanStatus(data);
+        if (data.status === 'complete') {
+            fetchData();
+        }
+    };
 
+    if (!scanStatus || scanStatus.status !== 'scanning') {
+        checkStatusAndFetch();
+    }
+  }, [page, sortBy, debouncedQuery, batchSize]);
+
+  // Polling effect remains separate and clean
   useEffect(() => {
     let intervalId;
     if (scanStatus?.status === 'scanning') {
@@ -79,35 +98,20 @@ function GalleryPage() {
         const data = await res.json();
         setScanStatus(data);
         if (data.status === 'complete') {
-          fetchFiles(true);
           clearInterval(intervalId);
+          setPage(1); // Trigger a fresh load
         }
       }, 2000);
     }
     return () => clearInterval(intervalId);
-  }, [scanStatus?.status, fetchFiles]);
-
-  useEffect(() => {
-    setPage(1);
-    fetchFiles(true);
-  }, [sortBy, debouncedQuery, fetchFiles]);
-
-  useEffect(() => {
-    if (page > 1) {
-      fetchFiles(false);
-    }
-  }, [page, fetchFiles]);
-  
-  useEffect(() => {
-    fetchFiles(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [scanStatus?.status]);
   
   const handleLike = async (filePath) => {
     await fetch(`/api/like/${filePath}`, { method: 'POST' });
     setFiles(files.filter(f => f.path !== filePath));
     if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
   };
+
   const handleDelete = async (filePath) => {
     if (window.confirm(`Are you sure you want to delete ${filePath}?`)) {
       await fetch(`/api/delete/${filePath}`, { method: 'DELETE' });
@@ -118,8 +122,6 @@ function GalleryPage() {
   
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
-
-  const visibleFiles = files.slice(0, visibleCount);
 
   if (!scanStatus) { return <div>Loading...</div>; }
   if (scanStatus.status === 'scanning') {
@@ -155,7 +157,7 @@ function GalleryPage() {
       </div>
       
       <Gallery 
-        files={visibleFiles} 
+        files={files} 
         onImageClick={openViewer} 
         lastImageRef={lastImageElementRef}
       />
