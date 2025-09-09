@@ -66,3 +66,20 @@ jobs:
               containrrr/watchtower \
               --cleanup --remove-volumes --run-once \
               vuvur-dev-api-1 vuvur-dev-portal-1
+
+  trigger-update-cloud:
+      name: Trigger Deployment Update
+      needs: build-and-push
+      runs-on:
+        - self-hosted
+        - cloud
+      if: github.ref_name == 'main' || github.ref_name == 'dev'
+
+      steps:
+        - name: Run Watchtower to pull new images
+          run: |
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              containrrr/watchtower \
+              --cleanup --remove-volumes --run-once \
+              vuvur-dev-api-1 vuvur-dev-portal-1
