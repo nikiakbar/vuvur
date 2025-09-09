@@ -1,55 +1,55 @@
-# name: Build and Push Docker Images
+name: Build and Push Docker Images
 
-# on:
-#   push:
-#     branches: [ "main", "dev" ]
-#   workflow_dispatch:
+on:
+  # push:
+  #   branches: [ "main", "dev" ]
+  workflow_dispatch:
 
-# jobs:
-#   build-and-push:
-#     runs-on: ubuntu-latest
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
 
-#     # Define the matrix strategy
-#     strategy:
-#       matrix:
-#         include:
-#           - service: api
-#             context: ./backend
-#             dockerfile: ./backend/Dockerfile
-#             tag_name: api
-#           - service: portal
-#             context: ./frontend
-#             dockerfile: ./frontend/Dockerfile
-#             tag_name: portal
+    # Define the matrix strategy
+    strategy:
+      matrix:
+        include:
+          - service: api
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+            tag_name: api
+          - service: portal
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+            tag_name: portal
 
-#     steps:
-#       - name: Checkout repository
-#         uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-#       - name: Set image tag suffix
-#         id: set_suffix
-#         run: |
-#           if [ "${{ github.ref_name }}" == "main" ]; then
-#             echo "tag_suffix=main" >> $GITHUB_OUTPUT
-#           elif [ "${{ github.ref_name }}" == "dev" ]; then
-#             echo "tag_suffix=dev" >> $GITHUB_OUTPUT
-#           fi
+      - name: Set image tag suffix
+        id: set_suffix
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "tag_suffix=main" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref_name }}" == "dev" ]; then
+            echo "tag_suffix=dev" >> $GITHUB_OUTPUT
+          fi
 
-#       - name: Log in to Docker Hub
-#         uses: docker/login-action@v3
-#         with:
-#           username: ${{ secrets.DOCKERHUB_USERNAME }}
-#           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-#       - name: Set up Docker Buildx
-#         uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-#       # This single step now runs in parallel for each item in the matrix
-#       - name: Build and push ${{ matrix.service }} image
-#         if: steps.set_suffix.outputs.tag_suffix != ''
-#         uses: docker/build-push-action@v5
-#         with:
-#           context: ${{ matrix.context }}
-#           file: ${{ matrix.dockerfile }}
-#           push: true
-#           tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
+      # This single step now runs in parallel for each item in the matrix
+      - name: Build and push ${{ matrix.service }} image
+        if: steps.set_suffix.outputs.tag_suffix != ''
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
