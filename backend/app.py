@@ -242,24 +242,25 @@ def list_files():
         limit = int(request.args.get('limit', settings.get('batch_size', 20)))
         offset = (page - 1) * limit
         sort_by = request.args.get('sort', 'random')
-        query_q = request.args.get('q', '').lower()
-        query_exif = request.args.get('exif_q', '').lower()
+        query = request.args.get('q', '').lower()
+        
         params = []
         sql_query = "SELECT path, type, width, height, mod_time, exif_json FROM media"
-        where_clauses = []
-        if query_q:
-            where_clauses.append("path LIKE ?"); params.append(f"%{query_q}%")
-        if query_exif:
-            where_clauses.append("exif_json LIKE ?"); params.append(f"%{query_exif}%")
-        if where_clauses:
-            sql_query += " WHERE " + " AND ".join(where_clauses)
+        
+        if query:
+            sql_query += " WHERE (LOWER(path) LIKE ? OR LOWER(exif_json) LIKE ?)"
+            params.append(f"%{query}%")
+            params.append(f"%{query}%")
+
         with get_db() as db:
             total_count_result = db.execute(f"SELECT COUNT(1) FROM ({sql_query}) AS base_query", params).fetchone()
             total_count = total_count_result[0] if total_count_result else 0
+        
         sort_map = {'date_desc': 'mod_time DESC', 'date_asc': 'mod_time ASC', 'file_asc': 'path ASC', 'file_desc': 'path DESC', 'random': 'RANDOM()'}
         order_by = sort_map.get(sort_by, 'RANDOM()')
         sql_query += f" ORDER BY {order_by} LIMIT ? OFFSET ?"
         params.extend([limit, offset])
+        
         with get_db() as db:
             results = db.execute(sql_query, params).fetchall()
             items = []
@@ -296,11 +297,8 @@ def random_files():
             for row in results:
                 exif_string = row['exif_json'] or '{}'
                 items.append({
-                    "path": row['path'],
-                    "type": row['type'],
-                    "width": row['width'],
-                    "height": row['height'],
-                    "mod_time": row['mod_time'],
+                    "path": row['path'], "type": row['type'], "width": row['width'],
+                    "height": row['height'], "mod_time": row['mod_time'],
                     "exif": json.loads(exif_string)
                 })
         return jsonify(items)
@@ -316,17 +314,13 @@ def random_single_file():
         init_db()
         sql_query = "SELECT path, type, width, height, mod_time, exif_json FROM media"
         params = []
-
         if query:
             sql_query += " WHERE (LOWER(path) LIKE ? OR LOWER(exif_json) LIKE ?)"
             params.append(f"%{query}%")
             params.append(f"%{query}%")
-        
         sql_query += " ORDER BY RANDOM() LIMIT 1"
-
         with get_db() as db:
             result = db.execute(sql_query, params).fetchone()
-
         if result:
             exif_string = result['exif_json'] or '{}'
             item = {
@@ -337,7 +331,6 @@ def random_single_file():
             return jsonify([item])
         else:
             return jsonify([])
-            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

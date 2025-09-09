@@ -12,21 +12,22 @@ function GalleryPage() {
 
   const [files, setFiles] = useState([]);
   const [scanStatus, setScanStatus] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(batchSize);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [showFullSize, setShowFullSize] = useState(false);
   
+  // --- Simplified State: Only one query ---
   const [sortBy, setSortBy] = useState('random');
-  const [filenameQuery, setFilenameQuery] = useState('');
-  const [exifQuery, setExifQuery] = useState('');
-
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounce(query, 500);
+  
+  const observer = useRef();
+  
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  const debouncedFilenameQuery = useDebounce(filenameQuery, 500);
-  const debouncedExifQuery = useDebounce(exifQuery, 500);
-  
-  const observer = useRef();
+  useEffect(() => { setVisibleCount(batchSize) }, [batchSize]);
 
   const lastImageElementRef = useCallback(node => {
     if (isLoading) return;
@@ -39,74 +40,74 @@ function GalleryPage() {
     if (node) observer.current.observe(node);
   }, [isLoading, page, totalPages]);
 
-  // This effect now ONLY handles resetting the page when filters change
+  const fetchFiles = useCallback(async (isNewSearch = false) => {
+    setIsLoading(true);
+    try {
+      const currentPage = isNewSearch ? 1 : page;
+      const params = new URLSearchParams({
+        sort: sortBy,
+        q: debouncedQuery, // Use the single debounced query
+        page: currentPage,
+        limit: batchSize
+      });
+      const url = `/api/files?${params.toString()}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.items && Array.isArray(data.items)) {
+        setFiles(prevFiles => (isNewSearch ? data.items : [...prevFiles, ...data.items]));
+        setTotalPages(data.total_pages);
+        setScanStatus({ status: 'complete' });
+      } else if (data.status === 'scanning') {
+        setScanStatus(data);
+        setFiles([]);
+      } else {
+        setFiles([]);
+      }
+    } catch (error) {
+      setFiles([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sortBy, debouncedQuery, page, batchSize]);
+
+  useEffect(() => {
+    let intervalId;
+    if (scanStatus?.status === 'scanning') {
+      intervalId = setInterval(async () => {
+        const res = await fetch('/api/scan-status');
+        const data = await res.json();
+        setScanStatus(data);
+        if (data.status === 'complete') {
+          fetchFiles(true);
+          clearInterval(intervalId);
+        }
+      }, 2000);
+    }
+    return () => clearInterval(intervalId);
+  }, [scanStatus?.status, fetchFiles]);
+
   useEffect(() => {
     setPage(1);
-  }, [sortBy, debouncedFilenameQuery, debouncedExifQuery]);
+    fetchFiles(true);
+  }, [sortBy, debouncedQuery, fetchFiles]);
 
-  // This single effect handles ALL data fetching
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      const isNewSearch = page === 1; // Any fetch on page 1 is a new search
-      try {
-        const params = new URLSearchParams({
-          sort: sortBy,
-          q: debouncedFilenameQuery,
-          exif_q: debouncedExifQuery,
-          page: page,
-          limit: batchSize
-        });
-        const url = `/api/files?${params.toString()}`;
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.items && Array.isArray(data.items)) {
-          setFiles(prev => isNewSearch ? data.items : [...prev, ...data.items]);
-          setTotalPages(data.total_pages);
-          setScanStatus({ status: 'complete' });
-        } else if (data.status === 'scanning') {
-          setScanStatus(data);
-          setFiles([]); // Clear files while scanning
-        } else {
-          console.error("API error or bad data:", data);
-          setFiles([]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch files:", error);
-        setFiles([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    const fetchScanStatus = async () => {
-      const res = await fetch('/api/scan-status');
-      const data = await res.json();
-      setScanStatus(data);
-      if (data.status === 'complete') {
-        fetchData(); // Scan is done, fetch data
-      }
-    };
-    
-    // Polling logic
-    if (scanStatus?.status === 'scanning') {
-      const intervalId = setInterval(fetchScanStatus, 2000);
-      return () => clearInterval(intervalId);
-    } else {
-      // If not scanning, just fetch the data
-      fetchData();
+    if (page > 1) {
+      fetchFiles(false);
     }
-  // We only want this main fetch logic to re-run when these key values change
-  }, [page, sortBy, debouncedFilenameQuery, debouncedExifQuery, batchSize]);
-
-
+  }, [page, fetchFiles]);
+  
+  useEffect(() => {
+    fetchFiles(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
   const handleLike = async (filePath) => {
     await fetch(`/api/like/${filePath}`, { method: 'POST' });
     setFiles(files.filter(f => f.path !== filePath));
     if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
   };
-
   const handleDelete = async (filePath) => {
     if (window.confirm(`Are you sure you want to delete ${filePath}?`)) {
       await fetch(`/api/delete/${filePath}`, { method: 'DELETE' });
@@ -118,9 +119,9 @@ function GalleryPage() {
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
 
-  if (!scanStatus) {
-    return <div>Loading...</div>;
-  }
+  const visibleFiles = files.slice(0, visibleCount);
+
+  if (!scanStatus) { return <div>Loading...</div>; }
   if (scanStatus.status === 'scanning') {
     return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
   }
@@ -130,17 +131,10 @@ function GalleryPage() {
       <div className="controls-bar settings">
         <input 
           type="text"
-          placeholder="Filter by filename..."
+          placeholder="Search filename or EXIF..."
           className="filter-input"
-          value={filenameQuery}
-          onChange={(e) => setFilenameQuery(e.target.value)}
-        />
-        <input 
-          type="text"
-          placeholder="Search prompts/EXIF..."
-          className="filter-input"
-          value={exifQuery}
-          onChange={(e) => setExifQuery(e.target.value)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
         />
         <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
           <option value="random">Random</option>
@@ -161,7 +155,7 @@ function GalleryPage() {
       </div>
       
       <Gallery 
-        files={files} 
+        files={visibleFiles} 
         onImageClick={openViewer} 
         lastImageRef={lastImageElementRef}
       />
