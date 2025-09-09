@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
-  const containerRef = useRef(null);
+  const containerRef = useRef(null); 
 
   const toggleZoom = (e) => {
     e.stopPropagation(); 
@@ -22,7 +22,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
           container.scrollLeft = scrollWidth / 2;
           container.scrollTop = scrollHeight / 2;
         }
-      }, 0);
+      }, 0); 
     }
   };
 
@@ -32,12 +32,10 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     }
   };
 
-  // Create two separate URL paths
   const imageUrl = showFullSize 
     ? `/api/view/all/${encodeURIComponent(file.path)}`
     : `/api/preview/${encodeURIComponent(file.path)}`;
     
-  // Videos MUST always use the full 'view' endpoint to be playable
   const videoUrl = `/api/view/all/${encodeURIComponent(file.path)}`;
 
   return (
