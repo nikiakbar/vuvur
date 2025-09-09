@@ -36,14 +36,15 @@ function GalleryPage() {
     if (node) observer.current.observe(node);
   }, [isLoading, page, totalPages]);
 
-  // Effect to reset to page 1 when filters change
+  // Effect to reset to page 1 ONLY when filters change
   useEffect(() => {
     setPage(1);
   }, [sortBy, debouncedQuery]);
   
-  // This is now the single, main effect for ALL data fetching.
+  // Single, main effect for ALL data fetching
   useEffect(() => {
     const fetchData = async () => {
+      // isNewSearch is true if we are on the first page
       const isNewSearch = page === 1;
       setIsLoading(true);
       try {
@@ -58,6 +59,7 @@ function GalleryPage() {
         const data = await response.json();
         
         if (data.items && Array.isArray(data.items)) {
+          // If it's a new search, replace the files. Otherwise, append them.
           setFiles(prev => isNewSearch ? data.items : [...prev, ...data.items]);
           setTotalPages(data.total_pages);
           setScanStatus({ status: 'complete' });
@@ -84,6 +86,8 @@ function GalleryPage() {
         }
     };
 
+    // Only run the fetch logic if the app is not currently in a scanning state.
+    // The polling effect will handle fetching after a scan completes.
     if (!scanStatus || scanStatus.status !== 'scanning') {
         checkStatusAndFetch();
     }
@@ -99,7 +103,7 @@ function GalleryPage() {
         setScanStatus(data);
         if (data.status === 'complete') {
           clearInterval(intervalId);
-          setPage(1); // Trigger a fresh load
+          setPage(1); // Trigger a fresh load by resetting the page
         }
       }, 2000);
     }
