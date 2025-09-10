@@ -2,7 +2,10 @@
 FROM python:3.10-slim
 
 # Install ffmpeg and add sqlite3 CLI tool
-RUN apt-get update && apt-get install -y ffmpeg sqlite3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    ffmpeg sqlite3 \
+    libsm6 libxext6 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
