@@ -370,34 +370,69 @@ def serve_preview_image(filename):
     return generate_and_serve_cached_media(filename, PREVIEW_CACHE_DIR, PREVIEW_MAX_WIDTH, PREVIEW_QUALITY)
 
 def generate_and_serve_cached_media(filename, cache_dir, max_width, quality):
+    """
+    Serve a cached thumbnail/preview for image or video.
+    If it doesn't exist, generate it.
+    """
     cache_path = os.path.join(cache_dir, filename)
-    if os.path.exists(cache_path): return send_from_directory(cache_dir, filename)
+    if os.path.exists(cache_path):
+        return send_from_directory(cache_dir, filename)
+
     media_type = get_media_type(filename)
     source_dir = get_source_dir(media_type)
     source_path = os.path.join(source_dir, filename)
-    if not os.path.exists(source_path): abort(404)
+    if not os.path.exists(source_path):
+        abort(404)
+
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+
     try:
         if media_type == 'image':
             with Image.open(source_path) as img:
                 if img.size[0] > max_width:
-                    w_percent = (max_width / float(img.size[0])); h_size = int((float(img.size[1]) * float(w_percent)))
+                    w_percent = (max_width / float(img.size[0]))
+                    h_size = int(float(img.size[1]) * w_percent)
                     img = img.resize((max_width, h_size), Image.Resampling.LANCZOS)
-                if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
                 img.save(cache_path, 'JPEG', quality=quality)
+
         elif media_type == 'video':
-            result = subprocess.run([
-                'ffmpeg', '-i', source_path, '-ss', '00:00:01.000', '-vframes', '1',
+            # Safe FFmpeg thumbnail generation
+            # Pick a frame at 0.5s or middle of video if shorter
+            duration = get_video_duration(source_path)
+            ss_time = min(0.5, max(duration / 2, 0))
+            ffmpeg_cmd = [
+                'ffmpeg', '-y', '-i', source_path,
+                '-ss', f'{ss_time:.3f}', '-vframes', '1',
                 '-vf', f'scale={max_width}:-1', cache_path
-            ], capture_output=True, text=True)
+            ]
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
             if result.returncode != 0:
-                print(f"--- FFmpeg Error for {filename} ---")
-                print(result.stderr)
-                print("------------------------------------")
+                print(f"FFmpeg failed for {filename}:\n{result.stderr}")
                 abort(500)
+
         return send_from_directory(cache_dir, filename)
+
+    except UnidentifiedImageError:
+        print(f"Cannot identify image file: {filename}")
+        abort(500)
     except Exception as e:
-        print(f"Error generating media for {filename}: {e}"); abort(500)
+        print(f"Error generating media for {filename}: {e}")
+        abort(500)
+
+
+def get_video_duration(path):
+    """Return video duration in seconds, 0 if unknown"""
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries',
+             'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', path],
+            capture_output=True, text=True
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return 0
 
 @app.route('/api/view/all/<path:filename>')
 def serve_full_file(filename):
