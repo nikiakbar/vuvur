@@ -256,11 +256,16 @@ def list_files():
             sql_query = f"{base_query} ORDER BY RANDOM() LIMIT 100"
             with get_db() as db:
                 results = db.execute(sql_query, params).fetchall()
-            items = [dict(row, exif=json.loads(row.pop('exif_json') or '{}')) for row in results]
+            items = []
+            for row in results:
+                exif_string = row['exif_json'] or '{}'
+                items.append({
+                    "path": row['path'], "type": row['type'], "width": row['width'],
+                    "height": row['height'], "mod_time": row['mod_time'],
+                    "exif": json.loads(exif_string)
+                })
             return jsonify({
-                "total_items": len(items),
-                "page": 1,
-                "total_pages": 1,
+                "total_items": len(items), "page": 1, "total_pages": 1,
                 "items": items
             })
         
@@ -270,10 +275,8 @@ def list_files():
             total_count = total_count_result[0] if total_count_result else 0
         
         sort_map = {
-            'date_desc': 'mod_time DESC',
-            'date_asc': 'mod_time ASC',
-            'file_asc': 'path ASC',
-            'file_desc': 'path DESC',
+            'date_desc': 'mod_time DESC', 'date_asc': 'mod_time ASC',
+            'file_asc': 'path ASC', 'file_desc': 'path DESC',
         }
         order_by = sort_map.get(sort_by, 'mod_time DESC')
         sql_query = f"{base_query} ORDER BY {order_by} LIMIT ? OFFSET ?"
