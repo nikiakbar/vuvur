@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 function Header({ currentTheme, toggleTheme }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   const closeMenu = () => setIsMenuOpen(false);
+
+  const handleSearchClick = () => {
+    navigate('/search');
+  };
 
   return (
     <header className="app-header">
@@ -19,12 +24,12 @@ function Header({ currentTheme, toggleTheme }) {
       </Link>
       
       <div className="header-actions">
-        <Link to="/random" className="header-action-button">
+        <Link to="/random-scroller" className="header-action-button">
           Random
         </Link>
-        <Link to="/search" className="header-action-button secondary">
+        <button onClick={handleSearchClick} className="header-action-button secondary">
           Search
-        </Link>
+        </button>
         <div className="menu-container">
           <button className="hamburger-button" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             ☰

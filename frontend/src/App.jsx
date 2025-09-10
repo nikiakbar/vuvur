@@ -71,7 +71,7 @@ function App() {
   };
 
   const location = useLocation();
-  const isFullscreen = location.pathname === '/random' || location.pathname === '/random-result';
+  const isFullscreen = location.pathname === '/random-scroller' || location.pathname === '/random-result';
 
   return (
     <div className="app-container">
@@ -103,7 +103,7 @@ function App() {
             />} 
           />
           <Route 
-            path="/random" 
+            path="/random-scroller" 
             element={<RandomPage 
               showFullSize={showFullSize} 
               preloadCount={preloadCountSetting.value} 

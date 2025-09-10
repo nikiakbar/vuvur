@@ -229,8 +229,8 @@ def handle_settings():
     settings = load_settings()
     return jsonify({"settings": settings, "locked_keys": list(LOCKED_SETTINGS)})
 
-@app.route('/api/files')
-def list_files():
+@app.route('/api/media')
+def get_media():
     if not os.path.exists(DB_PATH) or (SCAN_STATUS["scanning"] and SCAN_STATUS["progress"] == 0):
         if not SCAN_STATUS["scanning"]:
              threading.Thread(target=scan_and_cache_files, daemon=True).start()
@@ -303,7 +303,7 @@ def list_files():
             "items": items
         })
     except Exception as e:
-        print(f"Error in list_files: {e}")
+        print(f"Error in get_media: {e}")
         return jsonify({"status": "scanning", "progress": SCAN_STATUS["progress"], "total": SCAN_STATUS["total"]})
 
 @app.route('/api/scan-status')
