@@ -36,12 +36,15 @@ function GalleryPage() {
     if (node) observer.current.observe(node);
   }, [isLoading, page, totalPages]);
 
+  // Effect to reset to page 1 ONLY when filters change
   useEffect(() => {
     setPage(1);
   }, [sortBy, debouncedQuery]);
   
+  // Single, main effect for ALL data fetching.
   useEffect(() => {
     const fetchData = async () => {
+      // isNewSearch is true if we are on the first page
       const isNewSearch = page === 1;
       setIsLoading(true);
       try {
@@ -51,11 +54,12 @@ function GalleryPage() {
           page: page,
           limit: batchSize
         });
-        const url = `/api/media?${params.toString()}`;
+        const url = `/api/files?${params.toString()}`;
         const response = await fetch(url);
         const data = await response.json();
         
         if (data.items && Array.isArray(data.items)) {
+          // If it's a new search, replace the files. Otherwise, append them.
           setFiles(prev => isNewSearch ? data.items : [...prev, ...data.items]);
           setTotalPages(data.total_pages);
           setScanStatus({ status: 'complete' });
@@ -72,6 +76,7 @@ function GalleryPage() {
       }
     };
     
+    // Check scan status before fetching
     const checkStatusAndFetch = async () => {
         const res = await fetch('/api/scan-status');
         const data = await res.json();
@@ -81,11 +86,14 @@ function GalleryPage() {
         }
     };
 
+    // Only run the fetch logic if the app is not currently in a scanning state.
+    // The polling effect will handle fetching after a scan completes.
     if (!scanStatus || scanStatus.status !== 'scanning') {
         checkStatusAndFetch();
     }
   }, [page, sortBy, debouncedQuery, batchSize, scanStatus]);
 
+  // Polling effect remains separate and clean
   useEffect(() => {
     let intervalId;
     if (scanStatus?.status === 'scanning') {
@@ -95,7 +103,7 @@ function GalleryPage() {
         setScanStatus(data);
         if (data.status === 'complete') {
           clearInterval(intervalId);
-          setPage(1);
+          setPage(1); // Trigger a fresh load by resetting the page
         }
       }, 2000);
     }
