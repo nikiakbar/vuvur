@@ -1,6 +1,7 @@
 from flask import Flask
 import os
 from flasgger import Swagger
+import logging
 from app import auth, db, gallery, like, scan_api, search, settings, stream, thumbnails
 
 def create_app():
@@ -12,6 +13,10 @@ def create_app():
         DATABASE=os.path.join(app.instance_path, "vuvur.sqlite"),
     )
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     # ensure the instance folder exists
     try:
         os.makedirs(app.instance_path)
