@@ -2,13 +2,13 @@ services:
   api:
     build:
       context: ./api
-    image: nikiakbar/vuvur:api
+    # image: nikiakbar/vuvur:api
     pull_policy: always
     ports:
       - "5005:5000"
     volumes:
       # core requirements
-      - /srv/vuvur/data:/app/data
+      # - /srv/vuvur/data:/app/data
 
       - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
       - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
@@ -25,7 +25,7 @@ services:
   portal:
     build:
       context: ./portal
-    image: nikiakbar/vuvur:portal
+    # image: nikiakbar/vuvur:portal
     pull_policy: always
     ports:
       - "5004:80"

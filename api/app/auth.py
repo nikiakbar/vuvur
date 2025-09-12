@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session
-from app.db import get_user_by_username, create_user
+from app.db import create_user, authenticate
 from argon2 import PasswordHasher
 
 
