@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.db import get_db
+from .db import get_db
 
 bp = Blueprint("gallery", __name__)
 

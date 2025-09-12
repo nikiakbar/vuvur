@@ -1,7 +1,7 @@
 import os, subprocess
 from flask import Blueprint, send_file, abort
 from PIL import Image
-from app.db import get_db
+from .db import get_db
 
 bp = Blueprint("thumbnails", __name__)
 THUMB_DIR = "/app/data/thumbs"
