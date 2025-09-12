@@ -33,7 +33,8 @@ def init_db():
         size INTEGER,
         mtime INTEGER,
         liked INTEGER DEFAULT 0,
-        user_comment TEXT
+        user_comment TEXT,
+        type TEXT
     )
     """)
 
