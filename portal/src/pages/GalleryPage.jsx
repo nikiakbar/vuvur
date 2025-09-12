@@ -48,7 +48,7 @@ function GalleryPage() {
           page: page,
           limit: batchSize
         });
-        const url = `/api/files?${params.toString()}`;
+        const url = `/api/gallery?${params.toString()}`;
         const response = await fetch(url);
         const data = await response.json();
 
