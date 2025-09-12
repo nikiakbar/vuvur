@@ -1,7 +1,7 @@
 from flask import Flask
 import os
 
-from . import auth, db, gallery, like, scan_api, search, settings, stream, thumbnails
+from app import auth, db, gallery, like, scan_api, search, settings, stream, thumbnails
 
 def create_app():
     """Create and configure an instance of the Flask application."""
