@@ -20,7 +20,7 @@ services:
       - SCAN_INTERVAL=3600
       - GALLERY_BATCH_SIZE=20
       - RANDOM_PRELOAD_COUNT=3
-
+      - ENABLE_LOGIN=false
       
   portal:
     build:
