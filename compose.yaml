@@ -11,7 +11,7 @@ services:
       - /srv/vuvur/data:/app/data
 
       - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
-      # - ./media/videos:/mnt/gallery/videos
+      - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
       - /mnt/z/Locals/system/liked:/mnt/gallery/liked
     restart: unless-stopped
     environment:
