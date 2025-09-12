@@ -1,8 +1,9 @@
 import sqlite3
 import os
+from argon2 import PasswordHasher, exceptions
 
 DB_PATH = os.environ.get("DB_PATH", "app.db")
-
+ph = PasswordHasher()
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -65,13 +66,13 @@ def init_db():
 
 
 # ---------- User helpers ----------
-def get_user_count():
+def user_exists():
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) as count FROM users")
     row = c.fetchone()
     conn.close()
-    return row["count"]
+    return row["count"] > 0
 
 
 def create_user(username, password_hash):
@@ -82,14 +83,21 @@ def create_user(username, password_hash):
     conn.close()
 
 
-def get_user_by_username(username):
+def authenticate(username, password):
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username = ?", (username,))
+    c.execute("SELECT password FROM users WHERE username = ?", (username,))
     row = c.fetchone()
     conn.close()
-    return dict(row) if row else None
 
+    if not row:
+        return False
+
+    try:
+        ph.verify(row["password"], password)
+        return True
+    except exceptions.VerifyMismatchError:
+        return False
 
 # ---------- Media helpers ----------
 def insert_media(filename, path, size, mtime, user_comment=None):

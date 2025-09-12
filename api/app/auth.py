@@ -1,7 +1,10 @@
 from flask import Blueprint, request, jsonify, session
 from app.db import get_user_by_username, create_user
+from argon2 import PasswordHasher
+
 
 auth_bp = Blueprint("auth", __name__)
+ph = PasswordHasher()
 
 @auth_bp.route("/api/register", methods=["POST"])
 def register():
@@ -10,7 +13,10 @@ def register():
     data = request.json
     if not data.get("username") or not data.get("password"):
         return jsonify({"error": "Missing fields"}), 400
-    create_user(data["username"], data["password"])
+
+    # Hash the password with Argon2
+    hashed_password = ph.hash(data["password"])
+    create_user(data["username"], hashed_password)
     return jsonify({"message": "User registered"}), 201
 
 @auth_bp.route("/api/login", methods=["POST"])

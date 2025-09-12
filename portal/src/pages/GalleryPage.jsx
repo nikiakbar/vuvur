@@ -3,26 +3,23 @@ import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
 import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
-import { useSettings } from '../contexts/SettingsContext';
 
 function GalleryPage() {
-  const { settings } = useSettings();
-  const batchSize = settings?.batch_size || 20;
-  const zoomLevel = settings?.zoom_level || 2.5;
+  const batchSize = 20; // Default batch size
+  const zoomLevel = 2.5; // Default zoom level
 
   const [files, setFiles] = useState([]);
-  const [scanStatus, setScanStatus] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [showFullSize, setShowFullSize] = useState(false);
-  
+
   const [sortBy, setSortBy] = useState('random');
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 500);
-  
+
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const observer = useRef();
 
   const lastImageElementRef = useCallback(node => {
@@ -36,15 +33,12 @@ function GalleryPage() {
     if (node) observer.current.observe(node);
   }, [isLoading, page, totalPages]);
 
-  // Effect to reset to page 1 ONLY when filters change
   useEffect(() => {
     setPage(1);
   }, [sortBy, debouncedQuery]);
-  
-  // Single, main effect for ALL data fetching.
+
   useEffect(() => {
     const fetchData = async () => {
-      // isNewSearch is true if we are on the first page
       const isNewSearch = page === 1;
       setIsLoading(true);
       try {
@@ -57,15 +51,10 @@ function GalleryPage() {
         const url = `/api/files?${params.toString()}`;
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (data.items && Array.isArray(data.items)) {
-          // If it's a new search, replace the files. Otherwise, append them.
           setFiles(prev => isNewSearch ? data.items : [...prev, ...data.items]);
           setTotalPages(data.total_pages);
-          setScanStatus({ status: 'complete' });
-        } else if (data.status === 'scanning') {
-          setScanStatus(data);
-          setFiles([]);
         } else {
           setFiles([]);
         }
@@ -75,41 +64,10 @@ function GalleryPage() {
         setIsLoading(false);
       }
     };
-    
-    // Check scan status before fetching
-    const checkStatusAndFetch = async () => {
-        const res = await fetch('/api/scan-status');
-        const data = await res.json();
-        setScanStatus(data);
-        if (data.status === 'complete') {
-            fetchData();
-        }
-    };
 
-    // Only run the fetch logic if the app is not currently in a scanning state.
-    // The polling effect will handle fetching after a scan completes.
-    if (!scanStatus || scanStatus.status !== 'scanning') {
-        checkStatusAndFetch();
-    }
-  }, [page, sortBy, debouncedQuery, batchSize, scanStatus]);
+    fetchData();
+  }, [page, sortBy, debouncedQuery, batchSize]);
 
-  // Polling effect remains separate and clean
-  useEffect(() => {
-    let intervalId;
-    if (scanStatus?.status === 'scanning') {
-      intervalId = setInterval(async () => {
-        const res = await fetch('/api/scan-status');
-        const data = await res.json();
-        setScanStatus(data);
-        if (data.status === 'complete') {
-          clearInterval(intervalId);
-          setPage(1); // Trigger a fresh load by resetting the page
-        }
-      }, 2000);
-    }
-    return () => clearInterval(intervalId);
-  }, [scanStatus?.status]);
-  
   const handleLike = async (filePath) => {
     await fetch(`/api/like/${filePath}`, { method: 'POST' });
     setFiles(files.filter(f => f.path !== filePath));
@@ -123,19 +81,14 @@ function GalleryPage() {
       if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
     }
   };
-  
+
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
-
-  if (!scanStatus) { return <div>Loading...</div>; }
-  if (scanStatus.status === 'scanning') {
-    return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
-  }
 
   return (
     <>
       <div className="controls-bar settings">
-        <input 
+        <input
           type="text"
           placeholder="Search filename or EXIF..."
           className="filter-input"
@@ -153,16 +106,16 @@ function GalleryPage() {
             <input
               type="checkbox"
               id="full-size-toggle"
-              checked={showFullSize} 
+              checked={showFullSize}
               onChange={(e) => setShowFullSize(e.target.checked)}
             />
             <label htmlFor="full-size-toggle">Show Full-Size</label>
         </div>
       </div>
-      
-      <Gallery 
-        files={files} 
-        onImageClick={openViewer} 
+
+      <Gallery
+        files={files}
+        onImageClick={openViewer}
         lastImageRef={lastImageElementRef}
       />
       {isLoading && page > 1 && <div className="loading-spinner"></div>}
@@ -174,7 +127,7 @@ function GalleryPage() {
           onClose={closeViewer}
           onLike={handleLike}
           onDelete={handleDelete}
-          showFullSize={showFullSize} 
+          showFullSize={showFullSize}
           setCurrentIndex={setCurrentIndex}
           zoomLevel={zoomLevel}
         />
