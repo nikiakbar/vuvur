@@ -1,6 +1,6 @@
 import os, shutil
 from flask import Blueprint, jsonify, abort
-from .db import get_db
+from app.db import get_db
 
 bp = Blueprint("like", __name__)
 LIKED_DIR = "/mnt/gallery/liked"

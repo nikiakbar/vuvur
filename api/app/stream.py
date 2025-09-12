@@ -1,8 +1,8 @@
 import mimetypes
 import os
 from flask import Blueprint, request, Response, abort, send_file
-from .db import get_db
-from auth_middleware import login_required
+from app.db import get_db
+from app.auth_middleware import login_required
 
 stream_bp = Blueprint("stream", __name__)
 

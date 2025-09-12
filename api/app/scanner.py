@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from db import DB_PATH
+from app.db import DB_PATH
 from PIL import Image, ExifTags
 
 GALLERY_PATH = "/mnt/gallery"

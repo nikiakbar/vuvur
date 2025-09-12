@@ -1,10 +1,28 @@
 from flask import Blueprint, jsonify, request
-from .db import get_db
+from app.db import get_db
 
 bp = Blueprint("gallery", __name__)
 
 @bp.route("/api/gallery")
 def gallery():
+    """
+    Get a paginated list of media items.
+    ---
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        default: 1
+        description: The page number to retrieve.
+      - name: limit
+        in: query
+        type: integer
+        default: 50
+        description: The number of items per page.
+    responses:
+      200:
+        description: A list of media items.
+    """
     page = int(request.args.get("page", 1))
     limit = int(request.args.get("limit", 50))
     offset = (page - 1) * limit

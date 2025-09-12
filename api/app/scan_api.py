@@ -1,9 +1,9 @@
 from flask import Blueprint, jsonify
-from .scanner import scan
+from app.scanner import scan
 
 scan_bp = Blueprint("scan", __name__)
 
-@scan_bp.route("", methods=["POST"])
+@scan_bp.route("/", methods=["POST"])
 def trigger_scan():
     try:
         scan()

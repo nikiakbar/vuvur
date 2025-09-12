@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 import sqlite3
-from db import DB_PATH
+from app.db import DB_PATH
 
 search_bp = Blueprint("search", __name__)
 

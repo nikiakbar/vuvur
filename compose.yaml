@@ -1,11 +1,11 @@
 services:
   api:
-    # build:
-    #   context: ./backend
+    build:
+      context: ./api
     image: nikiakbar/vuvur:api
     pull_policy: always
     ports:
-      - "${API_PORT:-5000}:5000"
+      - "5005:5000"
     volumes:
       # core requirements
       - /srv/vuvur/data:/app/data
@@ -13,21 +13,24 @@ services:
       - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
       - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
       - /mnt/z/Locals/system/liked:/mnt/gallery/liked
+      - /mnt/z/Locals/system/recyclebin:/mnt/gallery/recyclebin
     restart: unless-stopped
     environment:
       # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.
       - SCAN_INTERVAL=3600
       - GALLERY_BATCH_SIZE=20
       - RANDOM_PRELOAD_COUNT=3
-      - ZOOM_LEVEL=2.0
+
       
   portal:
-    # build:
-    #   context: ./frontend
+    build:
+      context: ./portal
     image: nikiakbar/vuvur:portal
     pull_policy: always
     ports:
-      - "${PORTAL_PORT:-8080}:80"
+      - "5004:80"
     depends_on:
       - api
     restart: unless-stopped
+    environment:
+      - ZOOM_LEVEL=2.0

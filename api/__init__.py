@@ -1,11 +1,12 @@
 from flask import Flask
 import os
-
+from flasgger import Swagger
 from app import auth, db, gallery, like, scan_api, search, settings, stream, thumbnails
 
 def create_app():
     """Create and configure an instance of the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
+    swagger = Swagger(app)
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
         DATABASE=os.path.join(app.instance_path, "vuvur.sqlite"),

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session
-from db import user_exists, create_user, authenticate
+from app.db import get_user_by_username, create_user
 
 auth_bp = Blueprint("auth", __name__)
 
