@@ -47,9 +47,9 @@ function RandomResultPage({ showFullSize, zoomLevel }) {
       {media && (
         <div className={containerClass}>
           {media.type === 'image' ? (
-            <img src={`/api/view/all/${encodeURIComponent(media.path)}`} alt={media.path} />
+            <img src={`/api/stream/${media.id}`} alt={media.path} />
           ) : (
-            <video src={`/api/view/all/${encodeURIComponent(media.path)}`} controls autoPlay loop />
+            <video src={`/api/stream/${media.id}`} controls autoPlay loop />
           )}
         </div>
       )}

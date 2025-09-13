@@ -10,10 +10,14 @@ services:
       # core requirements
       # - /srv/vuvur/data:/app/data
 
-      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
-      - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
-      - /mnt/z/Locals/system/liked:/mnt/gallery/liked
-      - /mnt/z/Locals/system/recyclebin:/mnt/gallery/recyclebin
+      # - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
+      # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
+      # - /mnt/z/Locals/system/liked:/mnt/gallery/liked
+      # - /mnt/z/Locals/system/recyclebin:/mnt/gallery/recyclebin
+      - /mnt/z/Locals/system/outputs/samples-images/:/mnt/gallery/images
+      - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
+      - /mnt/z/Locals/system/outputs/samples-vids:/mnt/gallery/videos
+      - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
     restart: unless-stopped
     environment:
       # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.

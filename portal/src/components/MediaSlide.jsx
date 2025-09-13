@@ -10,9 +10,9 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
   const DRAG_THRESHOLD = 10;
 
   const imageUrl = showFullSize 
-    ? `/api/view/all/${encodeURIComponent(file.path)}`
-    : `/api/preview/${encodeURIComponent(file.path)}`;
-  const videoUrl = `/api/view/all/${encodeURIComponent(file.path)}`;
+      ? `/api/stream/${file.id}`
+      : `/api/thumbnails/${file.id}`;
+  const videoUrl = `/api/stream/${file.id}`;
 
   const handlePointerDown = (clientX, clientY) => {
     didDrag.current = false;

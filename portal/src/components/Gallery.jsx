@@ -31,7 +31,7 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
             onClick={() => onImageClick(index)}
           >
             <LazyImage 
-              src={`/api/thumbnail/${encodeURIComponent(file.path)}`} 
+              src={`/api/thumbnails/${file.id}`} 
               alt={file.path}
               width={file.width}
               height={file.height}

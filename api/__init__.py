@@ -3,8 +3,9 @@ import os
 from flasgger import Swagger
 import logging
 import threading
+import time
 from app.scanner import scan
-from app import auth, db, gallery, like, scan_api, search, settings, stream, thumbnails
+from app import auth, db, gallery, like, scan_api, search, settings, stream, thumbnail
 
 def run_scan_scheduler():
     """Periodically runs the scanner based on the SCAN_INTERVAL."""
@@ -49,7 +50,7 @@ def create_app():
     app.register_blueprint(search.search_bp)
     app.register_blueprint(settings.bp)
     app.register_blueprint(stream.stream_bp)
-    app.register_blueprint(thumbnails.bp)
+    app.register_blueprint(thumbnail.bp)
 
     # Run the initial scan in a separate thread to avoid blocking the server startup
     initial_scan_thread = threading.Thread(target=run_scan_scheduler, daemon=True)

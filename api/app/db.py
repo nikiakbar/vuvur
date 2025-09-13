@@ -34,7 +34,9 @@ def init_db():
         mtime INTEGER,
         liked INTEGER DEFAULT 0,
         user_comment TEXT,
-        type TEXT
+        type TEXT,
+        width INTEGER,
+        height INTEGER
     )
     """)
 

@@ -1,6 +1,8 @@
 import os
 import sqlite3
 import logging
+import subprocess
+import json
 from app.db import DB_PATH
 from PIL import Image, ExifTags
 
@@ -35,6 +37,7 @@ def extract_user_comment(image_path):
 def scan():
     logger.info("Starting library scan...")
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # Make sure you can access columns by name
     c = conn.cursor()
 
     # --- Scanning files on disk ---
@@ -62,34 +65,53 @@ def scan():
 
             size = stat.st_size
             mtime = stat.st_mtime
-            c.execute("SELECT size, mtime, user_comment FROM media WHERE path=?", (path,))
+            
+            c.execute("SELECT * FROM media WHERE path=?", (path,))
             row = c.fetchone()
+            
             user_comment = None
-            need_update = False
+            width, height = None, None
 
+            # Get dimensions and metadata
             if ftype == "image":
-                if row is None or row[0] != size or row[1] != mtime or row[2] is None:
-                    user_comment = extract_user_comment(path)
-                    need_update = True
+                user_comment = extract_user_comment(path)
+                try:
+                    with Image.open(path) as img:
+                        width, height = img.size
+                except Exception as e:
+                    logger.error(f"Could not get image dimensions for {path}: {e}")
+            elif ftype == 'video':
+                width, height = get_video_dimensions(path)
 
             if row is None:
                 logger.info(f"New file found: {path}")
                 c.execute(
-                    "INSERT INTO media (path, filename, type, size, mtime, user_comment) VALUES (?, ?, ?, ?, ?, ?)",
-                    (path, fname, ftype, size, mtime, user_comment)
+                    "INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (path, fname, ftype, size, mtime, user_comment, width, height)
                 )
-            elif need_update:
-                logger.info(f"Updating file metadata: {path}")
-                c.execute(
-                    "UPDATE media SET size=?, mtime=?, user_comment=? WHERE path=?",
-                    (size, mtime, user_comment, path)
-                )
+            else:
+                # Check if an update is needed
+                needs_update = False
+                if row['size'] != size or row['mtime'] != mtime:
+                    needs_update = True
+                if ftype == 'image' and row['user_comment'] != user_comment:
+                    needs_update = True
+                if row['width'] != width or row['height'] != height:
+                    needs_update = True
+
+                if needs_update:
+                    logger.info(f"Updating file metadata: {path}")
+                    c.execute(
+                        "UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=? WHERE path=?",
+                        (size, mtime, user_comment, width, height, path)
+                    )
+                    
     logger.info(f"Finished checking {file_count} files on disk.")
 
     # --- Deleting missing files from DB ---
     logger.info("Checking for files to remove from the database...")
     c.execute("SELECT path FROM media")
-    all_paths = [r[0] for r in c.fetchall()]
+    all_paths = [r["path"] for r in c.fetchall()]
     deleted_count = 0
     for db_path in all_paths:
         if not os.path.exists(db_path) or db_path.startswith(RECYCLEBIN_PATH):
@@ -102,3 +124,22 @@ def scan():
     conn.commit()
     conn.close()
     logger.info("Library scan finished.")
+    
+def get_video_dimensions(video_path):
+    """Get video dimensions using ffprobe."""
+    try:
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "json",
+            video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(result.stdout)
+        if "streams" in data and len(data["streams"]) > 0:
+            return data["streams"][0].get("width"), data["streams"][0].get("height")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError) as e:
+        logger.error(f"Could not get dimensions for {video_path}: {e}")
+    return None, None

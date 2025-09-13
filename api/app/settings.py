@@ -21,7 +21,10 @@ def save_settings(data):
 @bp.route("/api/settings", methods=["GET","POST"])
 def settings():
     if request.method == "GET":
-        return jsonify(load_settings())
+        return jsonify({
+            "settings": load_settings(),
+            "locked_keys": []
+        })
     data = request.json or {}
     save_settings(data)
-    return jsonify({"status": "ok"})
+    return jsonify(load_settings())

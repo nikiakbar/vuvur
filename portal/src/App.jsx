@@ -5,6 +5,8 @@ import GalleryPage from './pages/GalleryPage';
 import RandomPage from './pages/RandomPage';
 import RandomResultPage from './pages/RandomResultPage';
 import SearchPage from './pages/SearchPage';
+import SettingsPage from './pages/SettingsPage';
+import { SettingsProvider } from './contexts/SettingsContext';
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
@@ -28,31 +30,34 @@ function App() {
       {!isFullscreen && <Header currentTheme={theme} toggleTheme={toggleTheme} />}
 
       <main className={!isFullscreen ? "main-content" : "main-content-full"}>
-        <Routes>
-          <Route
-            path="/"
-            element={<GalleryPage
-              showFullSize={showFullSize}
-              setShowFullSize={setShowFullSize}
-            />}
-          />
-          <Route
-            path="/random-scroller"
-            element={<RandomPage
-              showFullSize={showFullSize}
-            />}
-          />
-          <Route
-            path="/search"
-            element={<SearchPage />}
-          />
-          <Route
-            path="/random-result"
-            element={<RandomResultPage
-              showFullSize={showFullSize}
-            />}
-          />
-        </Routes>
+        <SettingsProvider>
+          <Routes>
+            <Route
+              path="/"
+              element={<GalleryPage
+                showFullSize={showFullSize}
+                setShowFullSize={setShowFullSize}
+              />}
+            />
+            <Route
+              path="/random-scroller"
+              element={<RandomPage
+                showFullSize={showFullSize}
+              />}
+            />
+            <Route
+              path="/search"
+              element={<SearchPage />}
+            />
+            <Route
+              path="/random-result"
+              element={<RandomResultPage
+                showFullSize={showFullSize}
+              />}
+            />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </SettingsProvider>
       </main>
     </div>
   );
