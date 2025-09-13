@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from app.scanner import scan
-from app import auth, db, gallery, like, scan_api, search, settings, stream, thumbnail
+from app import auth, db, gallery, like, scan_api, search, settings, stream, thumbnail, random_scroller
 
 def run_scan_scheduler():
     """Periodically runs the scanner based on the SCAN_INTERVAL."""
@@ -51,7 +51,7 @@ def create_app():
     app.register_blueprint(settings.bp)
     app.register_blueprint(stream.stream_bp)
     app.register_blueprint(thumbnail.bp)
-
+    app.register_blueprint(random_scroller.bp) # Add this line
     # Run the initial scan in a separate thread to avoid blocking the server startup
     initial_scan_thread = threading.Thread(target=run_scan_scheduler, daemon=True)
     initial_scan_thread.start()
