@@ -6,12 +6,26 @@ import json
 from app.db import DB_PATH
 from PIL import Image, ExifTags
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 GALLERY_PATH = "/mnt/gallery"
 LIKED_PATH = os.path.join(GALLERY_PATH, "liked")
 RECYCLEBIN_PATH = os.path.join(GALLERY_PATH, "recyclebin")
+
+def get_video_dimensions(video_path):
+    """Get video dimensions using ffprobe."""
+    try:
+        cmd = [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height", "-of", "json", video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(result.stdout)
+        if "streams" in data and len(data["streams"]) > 0:
+            return data["streams"][0].get("width"), data["streams"][0].get("height")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError) as e:
+        logger.error(f"Could not get dimensions for {video_path}: {e}")
+    return None, None
 
 def extract_user_comment(image_path):
     """Try to read EXIF UserComment (Stable Diffusion prompt)."""
@@ -25,32 +39,42 @@ def extract_user_comment(image_path):
             if tag == "UserComment":
                 if isinstance(value, bytes):
                     try:
+                        # Attempt to decode UTF-16, then fall back to UTF-8 with error handling
+                        return value.decode("utf-16", errors="ignore").strip()
+                    except UnicodeDecodeError:
                         return value.decode("utf-8", errors="ignore").strip()
-                    except Exception:
-                        return None
                 return str(value).strip()
     except Exception as e:
         logger.error(f"Could not extract EXIF from {image_path}: {e}")
-        return None
     return None
 
 def scan():
     logger.info("Starting library scan...")
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # Make sure you can access columns by name
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # --- Scanning files on disk ---
-    file_count = 0
-    for root, dirs, files in os.walk(GALLERY_PATH):
+    # --- Step 1: Fetch all existing media data from the DB into a dictionary ---
+    logger.info("Fetching existing media from the database...")
+    db_media = {row["path"]: dict(row) for row in c.execute("SELECT * FROM media")}
+    db_paths = set(db_media.keys())
+    
+    # --- Step 2: Walk the filesystem and compare against the DB data ---
+    logger.info("Scanning files on disk...")
+    disk_paths = set()
+    files_to_add = []
+    files_to_update = []
+
+    for root, _, files in os.walk(GALLERY_PATH):
         if RECYCLEBIN_PATH in root:
             continue
 
         for fname in files:
-            file_count += 1
             path = os.path.join(root, fname)
+            disk_paths.add(path)
 
             ext = fname.lower().split(".")[-1]
+            ftype = None
             if ext in ("jpg", "jpeg", "png", "webp", "bmp"):
                 ftype = "image"
             elif ext in ("mp4", "webm", "mov", "avi", "mkv"):
@@ -66,80 +90,53 @@ def scan():
             size = stat.st_size
             mtime = stat.st_mtime
             
-            c.execute("SELECT * FROM media WHERE path=?", (path,))
-            row = c.fetchone()
-            
-            user_comment = None
-            width, height = None, None
-
-            # Get dimensions and metadata
-            if ftype == "image":
-                user_comment = extract_user_comment(path)
-                try:
-                    with Image.open(path) as img:
-                        width, height = img.size
-                except Exception as e:
-                    logger.error(f"Could not get image dimensions for {path}: {e}")
-            elif ftype == 'video':
-                width, height = get_video_dimensions(path)
-
-            if row is None:
-                logger.info(f"New file found: {path}")
-                c.execute(
-                    "INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (path, fname, ftype, size, mtime, user_comment, width, height)
-                )
+            # --- Compare with DB data ---
+            if path not in db_paths:
+                # New file found
+                width, height, user_comment = get_metadata(path, ftype)
+                files_to_add.append((path, fname, ftype, size, mtime, user_comment, width, height))
             else:
-                # Check if an update is needed
-                needs_update = False
-                if row['size'] != size or row['mtime'] != mtime:
-                    needs_update = True
-                if ftype == 'image' and row['user_comment'] != user_comment:
-                    needs_update = True
-                if row['width'] != width or row['height'] != height:
-                    needs_update = True
+                # Existing file, check if it needs an update
+                db_file = db_media[path]
+                if db_file["size"] != size or db_file["mtime"] != mtime:
+                    width, height, user_comment = get_metadata(path, ftype)
+                    files_to_update.append((size, mtime, user_comment, width, height, path))
 
-                if needs_update:
-                    logger.info(f"Updating file metadata: {path}")
-                    c.execute(
-                        "UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=? WHERE path=?",
-                        (size, mtime, user_comment, width, height, path)
-                    )
-                    
-    logger.info(f"Finished checking {file_count} files on disk.")
+    # --- Step 3: Batch database operations ---
+    if files_to_add:
+        logger.info(f"Adding {len(files_to_add)} new files to the database...")
+        c.executemany(
+            "INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            files_to_add
+        )
 
-    # --- Deleting missing files from DB ---
-    logger.info("Checking for files to remove from the database...")
-    c.execute("SELECT path FROM media")
-    all_paths = [r["path"] for r in c.fetchall()]
-    deleted_count = 0
-    for db_path in all_paths:
-        if not os.path.exists(db_path) or db_path.startswith(RECYCLEBIN_PATH):
-            logger.info(f"Removing missing file from DB: {db_path}")
-            c.execute("DELETE FROM media WHERE path=?", (db_path,))
-            deleted_count += 1
-    if deleted_count > 0:
-        logger.info(f"Removed {deleted_count} missing files from the database.")
+    if files_to_update:
+        logger.info(f"Updating {len(files_to_update)} files in the database...")
+        c.executemany(
+            "UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=? WHERE path=?",
+            files_to_update
+        )
+
+    # --- Step 4: Find and remove deleted files ---
+    paths_to_delete = db_paths - disk_paths
+    if paths_to_delete:
+        logger.info(f"Removing {len(paths_to_delete)} deleted files from the database...")
+        c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
 
     conn.commit()
     conn.close()
     logger.info("Library scan finished.")
-    
-def get_video_dimensions(video_path):
-    """Get video dimensions using ffprobe."""
-    try:
-        cmd = [
-            "ffprobe",
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height",
-            "-of", "json",
-            video_path
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        data = json.loads(result.stdout)
-        if "streams" in data and len(data["streams"]) > 0:
-            return data["streams"][0].get("width"), data["streams"][0].get("height")
-    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError) as e:
-        logger.error(f"Could not get dimensions for {video_path}: {e}")
-    return None, None
+
+def get_metadata(path, ftype):
+    """Helper function to get all metadata for a file."""
+    user_comment, width, height = None, None, None
+    if ftype == "image":
+        user_comment = extract_user_comment(path)
+        try:
+            with Image.open(path) as img:
+                width, height = img.size
+        except Exception as e:
+            logger.error(f"Could not get image dimensions for {path}: {e}")
+    elif ftype == 'video':
+        width, height = get_video_dimensions(path)
+    return width, height, user_comment
