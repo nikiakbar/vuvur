@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
@@ -7,11 +7,29 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
   const [currentPan, setCurrentPan] = useState({ x: 0, y: 0 });
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
   const didDrag = useRef(false);
+  const videoRef = useRef(null); // Create a ref for the video element
   const DRAG_THRESHOLD = 10;
 
+  // This effect will pause videos that are not in view
+  useEffect(() => {
+    if (videoRef.current) {
+      if (index === currentIndex) {
+        // Autoplay the current video
+        videoRef.current.play().catch(error => {
+          // Autoplay was prevented, which is common in browsers.
+          // The user will have to click the play button manually.
+        });
+      } else {
+        // Pause and reset any video that is not the current one
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
+    }
+  }, [currentIndex, index]);
+
   const imageUrl = showFullSize 
-      ? `/api/stream/${file.id}`
-      : `/api/thumbnails/${file.id}`;
+    ? `/api/stream/${file.id}`
+    : `/api/preview/${file.id}`;
   const videoUrl = `/api/stream/${file.id}`;
 
   const handlePointerDown = (clientX, clientY) => {
@@ -67,7 +85,6 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handlePointerUp}
-        onMouseLeave={handlePointerUp}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handlePointerUp}
@@ -84,9 +101,9 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
           />
         ) : (
           <video 
+            ref={videoRef} // Attach the ref to the video element
             src={videoUrl} 
             controls 
-            autoPlay 
             loop 
             onClick={(e) => e.stopPropagation()} 
           />

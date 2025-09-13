@@ -4,13 +4,13 @@ import Viewer from '../components/Viewer';
 import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 
-function GalleryPage() {
+function GalleryPage({ showFullSize, setShowFullSize }) {
   const batchSize = 20; // Default batch size
   const zoomLevel = 2.5; // Default zoom level
 
   const [files, setFiles] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(null);
-  const [showFullSize, setShowFullSize] = useState(false);
+  // const [showFullSize, setShowFullSize] = useState(false);
 
   const [sortBy, setSortBy] = useState('random');
   const [query, setQuery] = useState('');
