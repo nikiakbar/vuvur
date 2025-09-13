@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 GALLERY_PATH = "/mnt/gallery"
 LIKED_PATH = os.path.join(GALLERY_PATH, "liked")
 RECYCLEBIN_PATH = os.path.join(GALLERY_PATH, "recyclebin")
+SCAN_STATUS_PATH = "/app/data/scan_status.json" # New file to store progress
 
+# --- (get_video_dimensions and extract_user_comment functions remain the same) ---
 def get_video_dimensions(video_path):
     """Get video dimensions using ffprobe."""
     try:
@@ -39,7 +41,6 @@ def extract_user_comment(image_path):
             if tag == "UserComment":
                 if isinstance(value, bytes):
                     try:
-                        # Attempt to decode UTF-16, then fall back to UTF-8 with error handling
                         return value.decode("utf-16", errors="ignore").strip()
                     except UnicodeDecodeError:
                         return value.decode("utf-8", errors="ignore").strip()
@@ -48,22 +49,39 @@ def extract_user_comment(image_path):
         logger.error(f"Could not extract EXIF from {image_path}: {e}")
     return None
 
+def update_scan_status(progress, total):
+    """Writes the current scan progress to a file."""
+    with open(SCAN_STATUS_PATH, 'w') as f:
+        json.dump({"progress": progress, "total": total}, f)
+
 def scan():
     logger.info("Starting library scan...")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # --- Step 1: Fetch all existing media data from the DB into a dictionary ---
-    logger.info("Fetching existing media from the database...")
+    # --- Pre-scan: Count total files for the progress bar ---
+    logger.info("Counting total files for scanning...")
+    total_files = 0
+    valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
+    for root, _, files in os.walk(GALLERY_PATH):
+        if RECYCLEBIN_PATH in root:
+            continue
+        for fname in files:
+            if os.path.splitext(fname)[1].lower() in valid_extensions:
+                total_files += 1
+    update_scan_status(0, total_files)
+
+    # --- Fetch existing data from DB ---
     db_media = {row["path"]: dict(row) for row in c.execute("SELECT * FROM media")}
     db_paths = set(db_media.keys())
     
-    # --- Step 2: Walk the filesystem and compare against the DB data ---
+    # --- Main Scan: Walk filesystem and process files ---
     logger.info("Scanning files on disk...")
     disk_paths = set()
     files_to_add = []
     files_to_update = []
+    processed_count = 0
 
     for root, _, files in os.walk(GALLERY_PATH):
         if RECYCLEBIN_PATH in root:
@@ -71,16 +89,15 @@ def scan():
 
         for fname in files:
             path = os.path.join(root, fname)
-            disk_paths.add(path)
-
-            ext = fname.lower().split(".")[-1]
-            ftype = None
-            if ext in ("jpg", "jpeg", "png", "webp", "bmp"):
-                ftype = "image"
-            elif ext in ("mp4", "webm", "mov", "avi", "mkv"):
-                ftype = "video"
-            else:
+            ext = os.path.splitext(fname)[1].lower()
+            
+            if ext not in valid_extensions:
                 continue
+
+            processed_count += 1
+            disk_paths.add(path)
+            
+            ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
 
             try:
                 stat = os.stat(path)
@@ -90,37 +107,30 @@ def scan():
             size = stat.st_size
             mtime = stat.st_mtime
             
-            # --- Compare with DB data ---
             if path not in db_paths:
-                # New file found
                 width, height, user_comment = get_metadata(path, ftype)
                 files_to_add.append((path, fname, ftype, size, mtime, user_comment, width, height))
             else:
-                # Existing file, check if it needs an update
                 db_file = db_media[path]
                 if db_file["size"] != size or db_file["mtime"] != mtime:
                     width, height, user_comment = get_metadata(path, ftype)
                     files_to_update.append((size, mtime, user_comment, width, height, path))
+            
+            # Update progress every 10 files to avoid excessive writes
+            if processed_count % 10 == 0:
+                update_scan_status(processed_count, total_files)
 
-    # --- Step 3: Batch database operations ---
+    update_scan_status(total_files, total_files) # Final update
+
+    # --- Batch database operations ---
     if files_to_add:
-        logger.info(f"Adding {len(files_to_add)} new files to the database...")
-        c.executemany(
-            "INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            files_to_add
-        )
-
+        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
     if files_to_update:
-        logger.info(f"Updating {len(files_to_update)} files in the database...")
-        c.executemany(
-            "UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=? WHERE path=?",
-            files_to_update
-        )
+        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=? WHERE path=?", files_to_update)
 
-    # --- Step 4: Find and remove deleted files ---
+    # --- Remove deleted files ---
     paths_to_delete = db_paths - disk_paths
     if paths_to_delete:
-        logger.info(f"Removing {len(paths_to_delete)} deleted files from the database...")
         c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
 
     conn.commit()

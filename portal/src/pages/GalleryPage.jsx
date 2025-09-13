@@ -5,85 +5,124 @@ import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 
 function GalleryPage({ showFullSize, setShowFullSize }) {
-  const batchSize = 20; // Default batch size
-  const zoomLevel = 2.5; // Default zoom level
+  const batchSize = 20;
+  const zoomLevel = 2.5;
 
+  // State for gallery data
   const [files, setFiles] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(null);
-  // const [showFullSize, setShowFullSize] = useState(false);
-
+  
+  // State for controls and pagination
   const [sortBy, setSortBy] = useState('random');
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 500);
-
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
-  const observer = useRef();
+  // State for scan progress
+  const [scanStatus, setScanStatus] = useState({
+    scan_complete: false,
+    progress: 0,
+    total: 0,
+  });
 
+  // Effect to poll for scan status
+  useEffect(() => {
+    const checkScanStatus = async () => {
+      try {
+        const response = await fetch('/api/scan/status');
+        const data = await response.json();
+        setScanStatus(data);
+        if (data.scan_complete) {
+          clearInterval(intervalId);
+        }
+      } catch (error) {
+        console.error("Failed to check scan status:", error);
+        setScanStatus(prev => ({ ...prev, scan_complete: true })); // Stop on error
+      }
+    };
+
+    const intervalId = setInterval(checkScanStatus, 2000);
+    checkScanStatus(); // Initial check
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Effect to fetch data when page, sort, or query changes
+  useEffect(() => {
+    // Only fetch data if the initial scan is complete
+    if (!scanStatus.scan_complete) return;
+
+    setIsLoading(true);
+    const params = new URLSearchParams({
+      sort: sortBy,
+      q: debouncedQuery,
+      page: page,
+      limit: batchSize
+    });
+
+    fetch(`/api/gallery?${params.toString()}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.items && Array.isArray(data.items)) {
+          setFiles(prev => (page === 1 ? data.items : [...prev, ...data.items]));
+          setHasMore(page < data.total_pages);
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        setIsLoading(false);
+      });
+  }, [scanStatus.scan_complete, page, sortBy, debouncedQuery, batchSize]);
+
+  // Effect to reset the gallery when the user changes sort/search
+  useEffect(() => {
+    setPage(1);
+    setFiles([]); // Clear existing files to trigger a new fetch
+  }, [sortBy, debouncedQuery]);
+
+  // Infinite scroll observer
+  const observer = useRef();
   const lastImageElementRef = useCallback(node => {
     if (isLoading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && page < totalPages) {
+      if (entries[0].isIntersecting && hasMore) {
         setPage(prevPage => prevPage + 1);
       }
     });
     if (node) observer.current.observe(node);
-  }, [isLoading, page, totalPages]);
+  }, [isLoading, hasMore]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [sortBy, debouncedQuery]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const isNewSearch = page === 1;
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams({
-          sort: sortBy,
-          q: debouncedQuery,
-          page: page,
-          limit: batchSize
-        });
-        const url = `/api/gallery?${params.toString()}`;
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.items && Array.isArray(data.items)) {
-          setFiles(prev => isNewSearch ? data.items : [...prev, ...data.items]);
-          setTotalPages(data.total_pages);
-        } else {
-          setFiles([]);
-        }
-      } catch (error) {
-        setFiles([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [page, sortBy, debouncedQuery, batchSize]);
-
-  const handleLike = async (filePath) => {
-    await fetch(`/api/like/${filePath}`, { method: 'POST' });
-    setFiles(files.filter(f => f.path !== filePath));
-    if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
+  // --- Action Handlers ---
+  const handleLike = async (fileId) => {
+    try {
+      await fetch(`/api/toggle_like/${fileId}`, { method: 'POST' });
+      setFiles(files.filter(f => f.id !== fileId));
+      // Close viewer if the liked image was the last one
+      if (files.length === 1) setCurrentIndex(null);
+    } catch (error) {
+      console.error("Failed to like file:", error);
+    }
   };
 
-  const handleDelete = async (filePath) => {
-    if (window.confirm(`Are you sure you want to delete ${filePath}?`)) {
-      await fetch(`/api/delete/${filePath}`, { method: 'DELETE' });
-      setFiles(files.filter(f => f.path !== filePath));
-      if (currentIndex !== null && files[currentIndex]?.path === filePath) setCurrentIndex(null);
+  // NOTE: A backend endpoint for deleting files is not yet implemented.
+  const handleDelete = (fileId) => {
+    if (window.confirm(`Are you sure you want to delete this file? Note: This only removes it from the view for now.`)) {
+        setFiles(files.filter(f => f.id !== fileId));
+        if (files.length === 1) setCurrentIndex(null);
     }
   };
 
   const openViewer = (index) => setCurrentIndex(index);
   const closeViewer = () => setCurrentIndex(null);
+
+  // --- Render Logic ---
+  if (!scanStatus.scan_complete) {
+    return <ScanningDisplay progress={scanStatus.progress} total={scanStatus.total} />;
+  }
 
   return (
     <>
@@ -109,7 +148,7 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
               checked={showFullSize}
               onChange={(e) => setShowFullSize(e.target.checked)}
             />
-            <label htmlFor="full-size-toggle">Show Full-Size</label>
+            <label htmlFor="full-size-toggle">Show Full-Size in Viewer</label>
         </div>
       </div>
 
@@ -125,8 +164,8 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
           files={files}
           currentIndex={currentIndex}
           onClose={closeViewer}
-          onLike={handleLike}
-          onDelete={handleDelete}
+          onLike={() => handleLike(files[currentIndex]?.id)}
+          onDelete={() => handleDelete(files[currentIndex]?.id)}
           showFullSize={showFullSize}
           setCurrentIndex={setCurrentIndex}
           zoomLevel={zoomLevel}

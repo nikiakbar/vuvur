@@ -5,7 +5,7 @@ function ScanningDisplay({ progress, total }) {
   return (
     <div className="scanning-container">
       <h2>Scanning Library...</h2>
-      <p>Please wait, this may take several minutes for a large collection...</p>
+      <p>Please wait, this may take a few minutes for a large collection.</p>
       <progress value={progress} max={total}></progress>
       <p>{percent}% Complete</p>
       <p>({progress} / {total} files scanned)</p>
