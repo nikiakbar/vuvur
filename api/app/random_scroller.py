@@ -27,20 +27,26 @@ def random_single():
     conn = get_db()
     c = conn.cursor()
     
-    sql = "SELECT * FROM media"
-    params = []
-
+    item = None
     if q:
-        sql += " WHERE filename LIKE ? OR user_comment LIKE ?"
-        params.extend([f"%{q}%", f"%{q}%"])
-
-    sql += " ORDER BY RANDOM() LIMIT 1"
-    
-    c.execute(sql, tuple(params))
-    item = c.fetchone()
+        # Use the powerful FTS5 index for searching filenames and comments
+        c.execute("""
+            SELECT m.*
+            FROM media_fts f
+            JOIN media m ON m.id = f.rowid
+            WHERE media_fts MATCH ?
+            ORDER BY RANDOM() 
+            LIMIT 1
+        """, (q,))
+        item = c.fetchone()
+    else:
+        # If no query, get a random item from the entire library
+        c.execute("SELECT * FROM media ORDER BY RANDOM() LIMIT 1")
+        item = c.fetchone()
+        
     conn.close()
     
     if not item:
-        return jsonify({"error": "No media found"}), 404
+        return jsonify({"error": "No media found matching that query."}), 404
         
     return jsonify([dict(item)])
