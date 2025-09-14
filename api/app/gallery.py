@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app.db import get_db
+import json
 
 bp = Blueprint("gallery", __name__)
 
@@ -56,7 +57,18 @@ def gallery():
     params.extend([limit, offset])
 
     c.execute(sql, tuple(params))
-    items = [dict(row) for row in c.fetchall()]
+    
+    # ✅ FIX: Decode the exif string into a dictionary
+    items = []
+    for row in c.fetchall():
+        item = dict(row)
+        if item.get("exif"):
+            try:
+                item["exif"] = json.loads(item["exif"])
+            except (json.JSONDecodeError, TypeError):
+                item["exif"] = {} # Default to empty object on parsing error
+        items.append(item)
+        
     conn.close()
 
     return jsonify({
