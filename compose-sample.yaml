@@ -1,24 +1,35 @@
 services:
   api:
-    # build:
-    #   context: ./backend
-    image: nikiakbar/vuvur:api
+    image: nikiakbar/vuvur:api-main
     pull_policy: always
     ports:
-      - "${API_PORT:-5000}:5000"
+      - 5000:5000
     volumes:
       # core requirements
       - /srv/vuvur/data:/app/data
-
-      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
-      # - ./media/videos:/mnt/gallery/videos
-      - /mnt/z/Locals/system/liked:/mnt/gallery/liked
+      - ./media/:/mnt/gallery
+      - ./media/images:/mnt/gallery/images
+      - ./media/videos:/mnt/gallery/videos
+      - ./media/liked:/mnt/gallery/liked
+      - ./media/recyclebin:/mnt/gallery/recyclebin
     restart: unless-stopped
+    environment:
+      # --- System Settings ---
+      # The interval in seconds for the background scanner to check for new files.
+      # Set to 0 to disable periodic scanning.
+      - SCAN_INTERVAL=3600 # 1 hour
 
+      # Set to "true" to enable user login and registration.
+      # If "false", the gallery will be publicly accessible.
+      - ENABLE_LOGIN=false
+
+      # A random, secret string used for signing user sessions.
+      # It's critical to change this to a secure value if login is enabled.
+      - SECRET_KEY=dev
   portal:
     # build:
     #   context: ./frontend
-    image: nikiakbar/vuvur:portal
+    image: nikiakbar/vuvur:portal-main
     pull_policy: always
     ports:
       - "${PORTAL_PORT:-8080}:80"
@@ -26,5 +37,15 @@ services:
       - api
     restart: unless-stopped
     environment:
+      # Sets the default zoom level when a user clicks on an image in the viewer.
+      # The portal's entrypoint script injects this into the web app's configuration.
+      - VITE_ZOOM_LEVEL=2.5
+
+      # The number of images to load per batch in the main gallery view.
+      # This value is passed to the frontend at runtime.
+      # The default in the compose file is 20.
+      - VITE_GALLERY_BATCH_SIZE=20
+
+      # The number of random images to preload in the background on the random scroller page.
+      # The default in the compose file is 3.
       - VITE_RANDOM_PRELOAD_COUNT=3
-      - VITE_RANDOM_HISTORY_SIZE=5
