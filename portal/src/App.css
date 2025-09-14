@@ -382,24 +382,40 @@ body.no-scroll {
   outline: none;
 }
 .slide-info {
-  position: absolute; bottom: 20px; left: 50%;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.8);
   padding: 10px 20px;
   border-radius: 12px;
   text-align: center;
   width: auto;
   max-width: 80%;
   z-index: 5;
+  color: #ccc;
+  transition: all 0.3s ease;
+  max-height: 70px; /* Default max height */
+  overflow: hidden;
 }
+
+.slide-info.expanded {
+  bottom: 20px;
+  max-height: 50vh; /* Expanded height */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
 .viewer-filename {
-  color: #ccc; font-family: monospace;
+  font-family: monospace;
   margin: 0 0 10px 0;
   word-break: break-all;
 }
 .viewer-controls {
   position: static; background-color: transparent;
   border: none; padding: 0;
+  margin-top: 10px;
   gap: 1.5rem;
   display: flex; justify-content: center;
 }
@@ -485,40 +501,22 @@ body.no-scroll {
 .search-tip { font-size: 0.9rem; opacity: 0.7; }
 .inline-link { color: var(--accent-color); text-decoration: underline; margin-left: 0.5rem; }
 
-/* --- EXIF DISPLAY STYLES --- */
-.exif-overlay {
-  position: fixed; top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1002;
-  display: flex; justify-content: center; align-items: center;
-}
-.exif-content {
-  background-color: var(--header-bg); color: var(--text-color);
-  padding: 1.5rem;
-  border-radius: 8px;
-  width: 80%; max-width: 700px;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
-.exif-content h3 {
-  margin-top: 0;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.75rem;
-}
-.exif-close-button {
-  position: absolute; top: 0.5rem; right: 0.75rem;
-  background: none; border: none;
-  font-size: 1.5rem;
-  color: var(--text-color);
-  cursor: pointer;
-}
-.exif-table {
+/* --- REMOVED .exif-overlay and .exif-content STYLES --- */
+
+/* --- NEW STYLES for Embedded EXIF Table --- */
+.exif-table-embedded {
   font-size: 0.85rem;
   word-break: break-all;
+  text-align: left;
+  overflow-y: auto;
+  height: 100%;
+  color: var(--text-color);
+  background: var(--header-bg);
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
 }
+
 .exif-row {
   display: grid; grid-template-columns: 1fr 2fr;
   gap: 1rem;

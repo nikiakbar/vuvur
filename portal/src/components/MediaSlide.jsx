@@ -1,35 +1,64 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, onShowExif, showControls, zoomLevel }) => {
+// A simple component to render the EXIF data table, now used internally
+const ExifTable = ({ data }) => {
+  const renderValue = (key, value) => {
+    if ((key === 'UserComment' || key === 'parameters') && typeof value === 'string') {
+      const tags = value.split(',').map(tag => tag.trim()).filter(Boolean);
+      return (
+        <div className="tag-container">
+          {tags.map((tag, index) => (
+            <span key={index} className="tag-badge">{tag}</span>
+          ))}
+        </div>
+      );
+    }
+    return String(value);
+  };
+
+  return (
+    <div className="exif-table-embedded">
+      {Object.entries(data).map(([key, value]) => (
+        <div key={key} className="exif-row">
+          <div className="exif-key">{key}</div>
+          <div className="exif-value">{renderValue(key, value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+
+const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentPan, setCurrentPan] = useState({ x: 0, y: 0 });
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
   const didDrag = useRef(false);
-  const videoRef = useRef(null); // Create a ref for the video element
+  const videoRef = useRef(null);
+  const slideInfoRef = useRef(null);
   const DRAG_THRESHOLD = 10;
+  
+  // State to toggle EXIF visibility
+  const [showExif, setShowExif] = useState(false);
 
-  // This effect will pause videos that are not in view
   useEffect(() => {
     if (videoRef.current) {
       if (index === currentIndex) {
-        // Autoplay the current video
-        videoRef.current.play().catch(error => {
-          // Autoplay was prevented, which is common in browsers.
-          // The user will have to click the play button manually.
-        });
+        videoRef.current.play().catch(error => {});
       } else {
-        // Pause and reset any video that is not the current one
         videoRef.current.pause();
         videoRef.current.currentTime = 0;
       }
     }
+    // Reset EXIF view when scrolling to a new slide
+    if (index !== currentIndex) {
+      setShowExif(false);
+    }
   }, [currentIndex, index]);
 
-  const imageUrl = showFullSize 
-    ? `/api/stream/${file.id}`
-    : `/api/preview/${file.id}`;
+  const imageUrl = showFullSize ? `/api/stream/${file.id}` : `/api/preview/${file.id}`;
   const videoUrl = `/api/stream/${file.id}`;
 
   const handlePointerDown = (clientX, clientY) => {
@@ -41,17 +70,14 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
 
   const handlePointerMove = (clientX, clientY, event) => {
     if (!isDragging) return;
+    if (event) event.preventDefault();
     const deltaX = clientX - startPos.x;
     const deltaY = clientY - startPos.y;
     if (!didDrag.current && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
       didDrag.current = true;
     }
     if (isZoomed && file.type === 'image') {
-      if (event) event.preventDefault();
-      setCurrentPan({
-        x: startPan.x + deltaX,
-        y: startPan.y + deltaY
-      });
+      setCurrentPan({ x: startPan.x + deltaX, y: startPan.y + deltaY });
     }
   };
 
@@ -67,28 +93,51 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     setTimeout(() => { didDrag.current = false; }, 0);
   };
 
-  const handleMouseDown = (e) => { e.preventDefault(); handlePointerDown(e.clientX, e.clientY); };
-  const handleMouseMove = (e) => { e.preventDefault(); handlePointerMove(e.clientX, e.clientY, e); };
-  const handleTouchStart = (e) => {
-    if (e.touches.length !== 1) { setIsDragging(false); return; }
-    handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+  const handleShowExif = (e) => {
+    e.stopPropagation();
+    setShowExif(!showExif); // Toggle visibility
   };
-  const handleTouchMove = (e) => {
-    if (!isDragging || e.touches.length !== 1) return;
-    handlePointerMove(e.touches[0].clientX, e.touches[0].clientY, e);
+
+  const handleLikeClick = (e) => {
+    e.stopPropagation();
+    onLike();
+  };
+
+  const handleDeleteClick = (e) => {
+    e.stopPropagation();
+    onDelete();
+  };
+
+  const handleMouseDown = (e) => {
+    if (slideInfoRef.current && slideInfoRef.current.contains(e.target)) return;
+    handlePointerDown(e.clientX, e.clientY);
+  };
+
+  const handleTouchStart = (e) => {
+    if (slideInfoRef.current && slideInfoRef.current.contains(e.target)) return;
+    if (e.touches.length === 1) handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+  };
+
+  const getExifData = () => {
+    if (file && file.type === 'image' && file.exif) {
+      try { return JSON.parse(file.exif); } 
+      catch (e) { return { error: 'Could not parse EXIF data.' }; }
+    }
+    return { error: 'No EXIF data found.' };
   };
 
   return (
     <div className="viewer-slide">
       <div 
-        className={`viewer-image-container ${isZoomed ? 'zoomed' : ''} ${isDragging ? 'dragging' : ''}`}
+        className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
         onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
+        onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY, e)}
         onMouseUp={handlePointerUp}
+        onMouseLeave={() => setIsDragging(false)}
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
+        onTouchMove={(e) => e.touches.length === 1 && handlePointerMove(e.touches[0].clientX, e.touches[0].clientY, e)}
         onTouchEnd={handlePointerUp}
-        onTouchCancel={handlePointerUp}
+        onTouchCancel={() => setIsDragging(false)}
       >
         {file.type === 'image' ? (
           <img 
@@ -101,7 +150,7 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
           />
         ) : (
           <video 
-            ref={videoRef} // Attach the ref to the video element
+            ref={videoRef}
             src={videoUrl} 
             controls 
             loop 
@@ -111,13 +160,17 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
       </div>
 
       {showControls && index === currentIndex && (
-        <div className="slide-info">
+        <div className={`slide-info ${showExif ? 'expanded' : ''}`} ref={slideInfoRef}>
+          {showExif ? (
+            <ExifTable data={getExifData()} />
+          ) : (
             <p className="viewer-filename">{file.path}</p>
-            <div className="viewer-controls">
-                {file.type === 'image' && <button title="Show EXIF" onClick={onShowExif}>ℹ️</button>}
-                <button title="Like" onClick={() => onLike(file.path)}>❤️</button>
-                <button title="Delete" onClick={() => onDelete(file.path)}>🗑️</button>
-            </div>
+          )}
+          <div className="viewer-controls">
+            {file.type === 'image' && <button title="Show EXIF" onClick={handleShowExif}>ℹ️</button>}
+            <button title="Like" onClick={handleLikeClick}>❤️</button>
+            <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+          </div>
         </div>
       )}
     </div>

@@ -10,7 +10,7 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
 
   // State for gallery data
   const [files, setFiles] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(null);
+  const [initialIndex, setInitialIndex] = useState(null); // Changed from currentIndex
   
   // State for controls and pagination
   const [sortBy, setSortBy] = useState('random');
@@ -51,7 +51,6 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
 
   // Effect to fetch data when page, sort, or query changes
   useEffect(() => {
-    // Only fetch data if the initial scan is complete
     if (!scanStatus.scan_complete) return;
 
     setIsLoading(true);
@@ -79,7 +78,7 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
   // Effect to reset the gallery when the user changes sort/search
   useEffect(() => {
     setPage(1);
-    setFiles([]); // Clear existing files to trigger a new fetch
+    setFiles([]);
   }, [sortBy, debouncedQuery]);
 
   // Infinite scroll observer
@@ -101,23 +100,21 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
     try {
       await fetch(`/api/toggle_like/${fileId}`, { method: 'POST' });
       setFiles(files.filter(f => f.id !== fileId));
-      // Close viewer if the liked image was the last one
-      if (files.length === 1) setCurrentIndex(null);
+      if (files.length === 1) setInitialIndex(null);
     } catch (error) {
       console.error("Failed to like file:", error);
     }
   };
 
-  // NOTE: A backend endpoint for deleting files is not yet implemented.
   const handleDelete = (fileId) => {
-    if (window.confirm(`Are you sure you want to delete this file? Note: This only removes it from the view for now.`)) {
+    if (window.confirm(`Are you sure you want to delete this file? This is a permanent action.`)) {
         setFiles(files.filter(f => f.id !== fileId));
-        if (files.length === 1) setCurrentIndex(null);
+        if (files.length === 1) setInitialIndex(null);
     }
   };
 
-  const openViewer = (index) => setCurrentIndex(index);
-  const closeViewer = () => setCurrentIndex(null);
+  const openViewer = (index) => setInitialIndex(index);
+  const closeViewer = () => setInitialIndex(null);
 
   // --- Render Logic ---
   if (!scanStatus.scan_complete) {
@@ -159,15 +156,14 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
       />
       {isLoading && page > 1 && <div className="loading-spinner"></div>}
 
-      {currentIndex !== null && files.length > 0 && (
+      {initialIndex !== null && files.length > 0 && (
         <Viewer
           files={files}
-          currentIndex={currentIndex}
+          initialIndex={initialIndex}
           onClose={closeViewer}
-          onLike={() => handleLike(files[currentIndex]?.id)}
-          onDelete={() => handleDelete(files[currentIndex]?.id)}
+          onLike={handleLike}
+          onDelete={handleDelete}
           showFullSize={showFullSize}
-          setCurrentIndex={setCurrentIndex}
           zoomLevel={zoomLevel}
         />
       )}
