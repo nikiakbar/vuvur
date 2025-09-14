@@ -4,16 +4,18 @@ import logging
 import subprocess
 import json
 from app.db import DB_PATH
-from PIL import Image, ExifTags
+from PIL import Image
+
+# Import this to handle PNG metadata
+from PIL.PngImagePlugin import PngInfo
 
 logger = logging.getLogger(__name__)
 
 GALLERY_PATH = "/mnt/gallery"
 LIKED_PATH = os.path.join(GALLERY_PATH, "liked")
 RECYCLEBIN_PATH = os.path.join(GALLERY_PATH, "recyclebin")
-SCAN_STATUS_PATH = "/app/data/scan_status.json" # New file to store progress
+SCAN_STATUS_PATH = "/app/data/scan_status.json"
 
-# --- (get_video_dimensions and extract_user_comment functions remain the same) ---
 def get_video_dimensions(video_path):
     """Get video dimensions using ffprobe."""
     try:
@@ -29,25 +31,51 @@ def get_video_dimensions(video_path):
         logger.error(f"Could not get dimensions for {video_path}: {e}")
     return None, None
 
-def extract_user_comment(image_path):
-    """Try to read EXIF UserComment (Stable Diffusion prompt)."""
+def extract_exif_data(image_path):
+    """
+    Extracts metadata from an image, using the AUTOMATIC1111/stable-diffusion-webui logic.
+    For PNGs, it reads the 'parameters' text chunk.
+    For JPEGs, it falls back to reading standard EXIF.
+    """
     try:
-        img = Image.open(image_path)
-        exif = img.getexif()
-        if not exif:
-            return None
-        for tag_id, value in exif.items():
-            tag = ExifTags.TAGS.get(tag_id, tag_id)
-            if tag == "UserComment":
-                if isinstance(value, bytes):
-                    try:
-                        return value.decode("utf-16", errors="ignore").strip()
-                    except UnicodeDecodeError:
-                        return value.decode("utf-8", errors="ignore").strip()
-                return str(value).strip()
+        with Image.open(image_path) as img:
+            # A1111's primary method for PNGs
+            if "parameters" in img.info:
+                user_comment = img.info["parameters"]
+                # The full data is the user_comment itself
+                exif_json = json.dumps({"parameters": user_comment})
+                return exif_json, user_comment
+
+            # Fallback for JPEGs and other formats with standard EXIF
+            exif_data = img.getexif()
+            if exif_data:
+                # Use the robust piexif-style logic for standard EXIF as a fallback
+                from PIL import ExifTags
+                all_tags = {}
+                for key, val in exif_data.items():
+                    if key in ExifTags.TAGS:
+                        tag_name = ExifTags.TAGS[key]
+                        if isinstance(val, bytes):
+                           val = val.decode(errors='ignore')
+                        all_tags[tag_name] = val
+
+                exif_ifd = exif_data.get_ifd(ExifTags.IFD.Exif)
+                for key, val in exif_ifd.items():
+                    if key in ExifTags.TAGS:
+                        tag_name = ExifTags.TAGS[key]
+                        if isinstance(val, bytes):
+                           val = val.decode(errors='ignore')
+                        all_tags[tag_name] = val
+                
+                user_comment = all_tags.get("UserComment")
+                exif_json = json.dumps(all_tags, default=str)
+                return exif_json, user_comment
+
     except Exception as e:
-        logger.error(f"Could not extract EXIF from {image_path}: {e}")
-    return None
+        logger.error(f"Could not extract metadata from {image_path}: {e}")
+
+    return None, None
+
 
 def update_scan_status(progress, total):
     """Writes the current scan progress to a file."""
@@ -60,7 +88,6 @@ def scan():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # --- Pre-scan: Count total files for the progress bar ---
     logger.info("Counting total files for scanning...")
     total_files = 0
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
@@ -72,11 +99,9 @@ def scan():
                 total_files += 1
     update_scan_status(0, total_files)
 
-    # --- Fetch existing data from DB ---
     db_media = {row["path"]: dict(row) for row in c.execute("SELECT * FROM media")}
     db_paths = set(db_media.keys())
     
-    # --- Main Scan: Walk filesystem and process files ---
     logger.info("Scanning files on disk...")
     disk_paths = set()
     files_to_add = []
@@ -108,27 +133,24 @@ def scan():
             mtime = stat.st_mtime
             
             if path not in db_paths:
-                width, height, user_comment = get_metadata(path, ftype)
-                files_to_add.append((path, fname, ftype, size, mtime, user_comment, width, height))
+                width, height, user_comment, exif = get_metadata(path, ftype)
+                files_to_add.append((path, fname, ftype, size, mtime, user_comment, width, height, exif))
             else:
                 db_file = db_media[path]
                 if db_file["size"] != size or db_file["mtime"] != mtime:
-                    width, height, user_comment = get_metadata(path, ftype)
-                    files_to_update.append((size, mtime, user_comment, width, height, path))
+                    width, height, user_comment, exif = get_metadata(path, ftype)
+                    files_to_update.append((size, mtime, user_comment, width, height, exif, path))
             
-            # Update progress every 10 files to avoid excessive writes
             if processed_count % 10 == 0:
                 update_scan_status(processed_count, total_files)
 
-    update_scan_status(total_files, total_files) # Final update
+    update_scan_status(total_files, total_files)
 
-    # --- Batch database operations ---
     if files_to_add:
-        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
+        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
     if files_to_update:
-        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=? WHERE path=?", files_to_update)
+        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=? WHERE path=?", files_to_update)
 
-    # --- Remove deleted files ---
     paths_to_delete = db_paths - disk_paths
     if paths_to_delete:
         c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
@@ -139,9 +161,9 @@ def scan():
 
 def get_metadata(path, ftype):
     """Helper function to get all metadata for a file."""
-    user_comment, width, height = None, None, None
+    user_comment, width, height, exif = None, None, None, None
     if ftype == "image":
-        user_comment = extract_user_comment(path)
+        exif, user_comment = extract_exif_data(path)
         try:
             with Image.open(path) as img:
                 width, height = img.size
@@ -149,4 +171,4 @@ def get_metadata(path, ftype):
             logger.error(f"Could not get image dimensions for {path}: {e}")
     elif ftype == 'video':
         width, height = get_video_dimensions(path)
-    return width, height, user_comment
+    return width, height, user_comment, exif

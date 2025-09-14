@@ -5,7 +5,9 @@ import ExifDisplay from './ExifDisplay';
 const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, setCurrentIndex, zoomLevel }) => {
   const scrollContainerRef = useRef(null);
   const slideRefs = useRef([]);
-  const [showExif, setShowExif] = useState(false);
+  
+  // Use a single state for EXIF data. If it's null, the component is hidden.
+  const [exifData, setExifData] = useState(null);
   
   useEffect(() => {
     const handleKeyDown = (e) => { if (e.key === 'Escape') onClose() };
@@ -13,7 +15,10 @@ const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  useEffect(() => { slideRefs.current[currentIndex]?.scrollIntoView({ block: 'center' }) }, []);
+  // This effect scrolls to the initially opened image. It only runs once.
+  useEffect(() => {
+    slideRefs.current[currentIndex]?.scrollIntoView({ block: 'center' });
+  }, []);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -22,33 +27,44 @@ const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, 
           const index = parseInt(entry.target.dataset.index, 10);
           if (!isNaN(index)) {
             setCurrentIndex(index);
-            setShowExif(false);
+            // When scrolling to a new slide, always hide the EXIF display.
+            setExifData(null);
           }
         }
       });
     }, { root: scrollContainerRef.current, threshold: 0.7 });
+
     const refs = slideRefs.current;
     refs.forEach((ref) => { if (ref) observer.observe(ref) });
     return () => { refs.forEach((ref) => { if (ref) observer.unobserve(ref) }) };
   }, [files, setCurrentIndex]);
   
-  const currentFile = files[currentIndex];
-  if (!currentFile) return null;
-
-  const handleShowExif = () => {
-    if (currentFile.type === 'image') {
-      setShowExif(true);
+  const handleShowExif = (file) => {
+    // This function now exclusively sets the data to be displayed.
+    if (file && file.type === 'image' && file.exif) {
+      try {
+        setExifData(JSON.parse(file.exif));
+      } catch (e) {
+        console.error("Failed to parse EXIF JSON:", e);
+        setExifData({ error: "Could not parse EXIF data." });
+      }
+    } else {
+      setExifData({ error: "No EXIF data found." });
     }
   };
+  
+  const currentFile = files[currentIndex];
+  if (!currentFile) return null;
 
   return (
     <div className="viewer-overlay" ref={scrollContainerRef}>
       <button className="close-button" onClick={onClose}>&times;</button>
       
-      {showExif && (
+      {/* The ExifDisplay is now rendered conditionally based on exifData state */}
+      {exifData && (
         <ExifDisplay 
-          data={currentFile.exif || { error: "No EXIF data found." }} 
-          onClose={() => setShowExif(false)} 
+          data={exifData} 
+          onClose={() => setExifData(null)} 
         />
       )}
 
@@ -61,7 +77,8 @@ const Viewer = ({ files, currentIndex, onClose, onLike, onDelete, showFullSize, 
             showFullSize={showFullSize}
             onLike={onLike}
             onDelete={onDelete}
-            onShowExif={handleShowExif}
+            // The onClick handler is now simpler and more direct.
+            onShowExif={() => handleShowExif(file)}
             showControls={true}
             zoomLevel={zoomLevel || 2.5} 
           />

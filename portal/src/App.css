@@ -516,7 +516,7 @@ body.no-scroll {
   cursor: pointer;
 }
 .exif-table {
-  font-family: monospace; font-size: 0.85rem;
+  font-size: 0.85rem;
   word-break: break-all;
 }
 .exif-row {
@@ -526,14 +526,20 @@ body.no-scroll {
   border-bottom: 1px solid var(--border-color);
 }
 .exif-row:last-child { border-bottom: none; }
-.exif-key { font-weight: bold; color: var(--accent-color); }
+.exif-key {
+  font-weight: bold;
+  color: var(--accent-color);
+  font-family: monospace;
+}
 
 /* --- TAG STYLES --- */
 .tag-container { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .tag-badge {
-  background-color: var(--tag-bg); color: var(--tag-text);
+  background-color: var(--tag-bg);
+  color: var(--tag-text);
   padding: 0.25rem 0.6rem;
   border-radius: 1rem;
   font-size: 0.75rem;
   line-height: 1.5;
+  font-family: monospace;
 }

@@ -36,7 +36,8 @@ def init_db():
         user_comment TEXT,
         type TEXT,
         width INTEGER,
-        height INTEGER
+        height INTEGER,
+        exif TEXT 
     )
     """)
 
