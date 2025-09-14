@@ -4,7 +4,7 @@ import os
 import json
 
 scan_bp = Blueprint("scan", __name__)
-INITIAL_SCAN_FLAG_PATH = "/app/data/.initial_scan_complete"  # Add this line
+INITIAL_SCAN_FLAG_PATH = "/app/data/.initial_scan_complete"
 SCAN_STATUS_PATH = "/app/data/scan_status.json"
 
 @scan_bp.route("/api/scan/status", methods=["GET"])
@@ -42,6 +42,10 @@ def cleanup_cache():
         if os.path.exists(INITIAL_SCAN_FLAG_PATH):
             os.remove(INITIAL_SCAN_FLAG_PATH)
         scan()
+        # ADD THIS BLOCK TO FIX THE ISSUE
+        # Re-create the flag file to signal that the scan is done
+        with open(INITIAL_SCAN_FLAG_PATH, 'w') as f:
+            f.write('done')
         return jsonify({"message": "Library re-scan triggered successfully."}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
