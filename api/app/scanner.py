@@ -23,10 +23,13 @@ def get_video_dimensions(video_path):
             "ffprobe", "-v", "error", "-select_streams", "v:0",
             "-show_entries", "stream=width,height", "-of", "json", video_path
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # Add a timeout (e.g., 5 seconds) to the subprocess run command
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
         data = json.loads(result.stdout)
         if "streams" in data and len(data["streams"]) > 0:
             return data["streams"][0].get("width"), data["streams"][0].get("height")
+    except subprocess.TimeoutExpired:
+        logger.error(f"ffprobe timed out for {video_path}")
     except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError) as e:
         logger.error(f"Could not get dimensions for {video_path}: {e}")
     return None, None
