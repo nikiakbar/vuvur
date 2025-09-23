@@ -4,6 +4,7 @@ import sqlite3
 import logging
 import subprocess
 import json
+import concurrent.futures
 import time  # Import the time module
 from app.db import DB_PATH
 from PIL import Image
@@ -88,77 +89,78 @@ def scan():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    logger.info("Counting total files for scanning...")
-    total_files = 0
+    logger.info("Discovering all files on disk...")
+    all_disk_paths = []
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
     for root, _, files in os.walk(GALLERY_PATH):
         if RECYCLEBIN_PATH in root:
             continue
         for fname in files:
             if os.path.splitext(fname)[1].lower() in valid_extensions:
-                total_files += 1
+                all_disk_paths.append(os.path.join(root, fname))
+    
+    total_files = len(all_disk_paths)
     update_scan_status(0, total_files)
-    logger.info(f"Found {total_files} total files to process.")
+    logger.info(f"Found {total_files} total media files.")
 
     logger.info("Fetching existing media from database...")
     db_media = {row["path"]: dict(row) for row in c.execute("SELECT * FROM media")}
     db_paths = set(db_media.keys())
     logger.info(f"Database contains {len(db_paths)} records.")
     
-    logger.info("Scanning files on disk...")
-    disk_paths = set()
-    files_to_add = []
-    files_to_update = []
-    processed_count = 0
-
-    for root, _, files in os.walk(GALLERY_PATH):
-        if RECYCLEBIN_PATH in root:
+    logger.info("Identifying files that need metadata extraction...")
+    files_to_process = []
+    for path in all_disk_paths:
+        try:
+            stat = os.stat(path)
+            if path not in db_paths or db_media[path]["size"] != stat.st_size or db_media[path]["mtime"] != stat.st_mtime:
+                files_to_process.append(path)
+        except FileNotFoundError:
             continue
 
-        for fname in files:
-            path = os.path.join(root, fname)
-            ext = os.path.splitext(fname)[1].lower()
-            
-            if ext not in valid_extensions:
-                continue
+    logger.info(f"Found {len(files_to_process)} new or modified files to process in parallel.")
 
-            processed_count += 1
-            disk_paths.add(path)
-            
-            ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
+    files_to_add = []
+    files_to_update = []
 
-            try:
-                stat = os.stat(path)
-            except FileNotFoundError:
-                continue
+    def process_file_metadata(path):
+        """Wrapper function to get all data for a single file."""
+        ext = os.path.splitext(path)[1].lower()
+        ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
+        stat = os.stat(path)
+        width, height, user_comment, exif = get_metadata(path, ftype)
+        return {
+            "path": path, "filename": os.path.basename(path), "type": ftype,
+            "size": stat.st_size, "mtime": stat.st_mtime, "user_comment": user_comment,
+            "width": width, "height": height, "exif": exif
+        }
 
-            size = stat.st_size
-            mtime = stat.st_mtime
-            
-            if path not in db_paths:
-                width, height, user_comment, exif = get_metadata(path, ftype)
-                files_to_add.append((path, fname, ftype, size, mtime, user_comment, width, height, exif))
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        results = executor.map(process_file_metadata, files_to_process)
+        for i, data in enumerate(results):
+            if data['path'] not in db_paths:
+                # Prepare data for insertion
+                files_to_add.append(tuple(data.values()))
             else:
-                db_file = db_media[path]
-                if db_file["size"] != size or db_file["mtime"] != mtime:
-                    width, height, user_comment, exif = get_metadata(path, ftype)
-                    files_to_update.append((size, mtime, user_comment, width, height, exif, path))
+                # Prepare data for update
+                update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['path'])
+                files_to_update.append(update_data)
             
-            if processed_count % 100 == 0: # Log progress every 100 files
-                logger.info(f"Scan progress: {processed_count}/{total_files}")
-                update_scan_status(processed_count, total_files)
+            if (i + 1) % 100 == 0:
+                logger.info(f"Metadata extraction progress: {i + 1}/{len(files_to_process)}")
+                update_scan_status(i + 1, len(files_to_process))
 
-    update_scan_status(total_files, total_files)
-    logger.info("Disk scan complete. Preparing database updates.")
+    logger.info("Metadata extraction complete. Preparing database updates.")
 
     if files_to_add:
         logger.info(f"Adding {len(files_to_add)} new files to the database...")
         c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
+
     if files_to_update:
         logger.info(f"Updating {len(files_to_update)} existing files in the database...")
         c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=? WHERE path=?", files_to_update)
 
-    paths_to_delete = db_paths - disk_paths
+    paths_to_delete = db_paths - set(all_disk_paths)
     if paths_to_delete:
         logger.info(f"Removing {len(paths_to_delete)} deleted files from the database...")
         c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
