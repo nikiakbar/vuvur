@@ -8,6 +8,7 @@ from filelock import FileLock, Timeout
 
 from app.scanner import scan
 from app import auth, db, gallery, like, scan_api, search, stream, random_scroller, thumbnails, health
+from app import delete
 
 # Define paths globally for clarity
 LOCK_PATH = "/app/data/scanner.lock"
@@ -72,7 +73,7 @@ def create_app():
     app.register_blueprint(thumbnails.bp)
     app.register_blueprint(random_scroller.bp)
     app.register_blueprint(health.bp)
-    
+    app.register_blueprint(delete.bp)
     # Start the scanner manager in a background thread
     scan_thread = threading.Thread(target=run_scanner_manager, daemon=True)
     scan_thread.start()
