@@ -19,4 +19,4 @@ COPY . .
 EXPOSE 5000
 
 # CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "__init__:create_app()"]
-CMD ["gunicorn", "-w", "2", "-k", "gevent", "--max-requests", "1000", "--timeout", "120", "-b", "0.0.0.0:5000", "__init__:create_app()"]
+CMD ["gunicorn", "-w", "2", "-k", "gevent", "--max-requests", "500", "-b", "0.0.0.0:5000", "__init__:create_app()"]
