@@ -7,7 +7,7 @@ import time
 from filelock import FileLock, Timeout
 
 from app.scanner import scan
-from app import auth, db, gallery, like, scan_api, search, settings, stream, random_scroller, thumbnails, health
+from app import auth, db, gallery, like, scan_api, search, stream, random_scroller, thumbnails, health
 
 # Define paths globally for clarity
 LOCK_PATH = "/app/data/scanner.lock"
@@ -67,7 +67,7 @@ def create_app():
     app.register_blueprint(like.bp)
     app.register_blueprint(scan_api.scan_bp)
     app.register_blueprint(search.search_bp)
-    app.register_blueprint(settings.bp)
+    # app.register_blueprint(settings.bp)
     app.register_blueprint(stream.stream_bp)
     app.register_blueprint(thumbnails.bp)
     app.register_blueprint(random_scroller.bp)
