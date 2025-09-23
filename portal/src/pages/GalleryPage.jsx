@@ -106,26 +106,25 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
     }
   };
 
-  const handleDelete = async (fileId) => {
-    if (window.confirm(`Move this file to the recycle bin?`)) {
-      try {
-        // Call the new backend endpoint
-        const response = await fetch(`/api/delete/${fileId}`, { method: 'POST' });
+const handleDelete = async (fileId) => {
+    // The confirmation "if" statement has been removed.
+    try {
+      // Call the backend endpoint immediately
+      const response = await fetch(`/api/delete/${fileId}`, { method: 'POST' });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to delete file.');
-        }
-
-        // If the API call is successful, then update the UI
-        setFiles(files.filter(f => f.id !== fileId));
-        // Close the viewer if the last image was deleted
-        if (files.length === 1) setInitialIndex(null);
-
-      } catch (error) {
-        console.error("Failed to delete file:", error);
-        alert(`Error: ${error.message}`); // Show an error message to the user
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete file.');
       }
+
+      // If the API call is successful, then update the UI
+      setFiles(files.filter(f => f.id !== fileId));
+      // Close the viewer if the last image was deleted
+      if (files.length === 1) setInitialIndex(null);
+
+    } catch (error) {
+      console.error("Failed to delete file:", error);
+      alert(`Error: ${error.message}`); // Show an error message to the user
     }
   };
 
