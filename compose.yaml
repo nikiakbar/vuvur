@@ -22,11 +22,16 @@ services:
     restart: unless-stopped
     environment:
       # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.
-      - SCAN_INTERVAL=0
+      - SCAN_INTERVAL=15
       # - SCAN_INTERVAL=3600
       - GALLERY_BATCH_SIZE=20
       - RANDOM_PRELOAD_COUNT=3
       - ENABLE_LOGIN=false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   portal:
     build:
@@ -36,7 +41,9 @@ services:
     ports:
       - "5004:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+
     restart: unless-stopped
     environment:
       - ZOOM_LEVEL=2.0

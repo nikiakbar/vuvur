@@ -1,59 +1,42 @@
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import React, { createContext, useState, useContext } from 'react';
+
+// Define the default settings for the frontend
+const defaultSettings = {
+  zoom_level: 2.5,
+  // You can add other frontend-specific settings here in the future
+};
+
+// Function to load settings from the browser's local storage
+const loadSettingsFromStorage = () => {
+  try {
+    const storedSettings = localStorage.getItem('vuvur-settings');
+    // Merge stored settings with defaults to ensure all keys are present
+    return storedSettings ? { ...defaultSettings, ...JSON.parse(storedSettings) } : defaultSettings;
+  } catch (error) {
+    console.error("Failed to parse settings from local storage:", error);
+    return defaultSettings;
+  }
+};
 
 // Create the context
 const SettingsContext = createContext(null);
 
 // Create the provider component
 export const SettingsProvider = ({ children }) => {
-  const [settings, setSettings] = useState(null);
-  const [lockedKeys, setLockedKeys] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState(loadSettingsFromStorage);
 
-  // Function to fetch settings from the backend
-  const fetchSettings = useCallback(async () => {
+  // Function to save settings to state and local storage
+  const saveSettings = (newSettings) => {
     try {
-      const response = await fetch('/api/settings');
-      const data = await response.json();
-      setSettings(data.settings);
-      setLockedKeys(data.locked_keys);
+      const settingsToSave = { ...settings, ...newSettings };
+      localStorage.setItem('vuvur-settings', JSON.stringify(settingsToSave));
+      setSettings(settingsToSave);
     } catch (error) {
-      console.error("Failed to load app settings:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Fetch settings when the app first loads
-  useEffect(() => {
-    fetchSettings();
-  }, [fetchSettings]);
-
-  // Function to save settings to the backend
-  const saveSettings = async (newSettings) => {
-    try {
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings),
-      });
-      const data = await response.json();
-      setSettings(data); // Set the returned (and validated) settings
-    } catch (error) {
-      console.error("Failed to save settings:", error);
+      console.error("Failed to save settings to local storage:", error);
     }
   };
 
-  const value = {
-    settings,
-    lockedKeys,
-    isLoading,
-    saveSettings,
-  };
-
-  // Show a loading indicator until settings are fetched
-  if (isLoading) {
-    return <div className="loading-fullscreen">Loading Settings...</div>;
-  }
+  const value = { settings, saveSettings };
 
   return (
     <SettingsContext.Provider value={value}>
