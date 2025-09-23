@@ -1,12 +1,12 @@
+# In api/app/scanner.py
 import os
 import sqlite3
 import logging
 import subprocess
 import json
+import time  # Import the time module
 from app.db import DB_PATH
 from PIL import Image
-
-# Import this to handle PNG metadata
 from PIL.PngImagePlugin import PngInfo
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,6 @@ def get_video_dimensions(video_path):
             "ffprobe", "-v", "error", "-select_streams", "v:0",
             "-show_entries", "stream=width,height", "-of", "json", video_path
         ]
-        # Set the timeout for the subprocess run command to 5 seconds
         result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=5)
         data = json.loads(result.stdout)
         if "streams" in data and len(data["streams"]) > 0:
@@ -34,6 +33,7 @@ def get_video_dimensions(video_path):
         logger.error(f"Could not get dimensions for {video_path}: {e}")
     return None, None
 
+
 def extract_exif_data(image_path):
     """
     Extracts metadata from an image, using the AUTOMATIC1111/stable-diffusion-webui logic.
@@ -42,17 +42,13 @@ def extract_exif_data(image_path):
     """
     try:
         with Image.open(image_path) as img:
-            # A1111's primary method for PNGs
             if "parameters" in img.info:
                 user_comment = img.info["parameters"]
-                # The full data is the user_comment itself
                 exif_json = json.dumps({"parameters": user_comment})
                 return exif_json, user_comment
 
-            # Fallback for JPEGs and other formats with standard EXIF
             exif_data = img.getexif()
             if exif_data:
-                # Use the robust piexif-style logic for standard EXIF as a fallback
                 from PIL import ExifTags
                 all_tags = {}
                 for key, val in exif_data.items():
@@ -86,6 +82,7 @@ def update_scan_status(progress, total):
         json.dump({"progress": progress, "total": total}, f)
 
 def scan():
+    start_time = time.time()
     logger.info("Starting library scan...")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -101,9 +98,12 @@ def scan():
             if os.path.splitext(fname)[1].lower() in valid_extensions:
                 total_files += 1
     update_scan_status(0, total_files)
+    logger.info(f"Found {total_files} total files to process.")
 
+    logger.info("Fetching existing media from database...")
     db_media = {row["path"]: dict(row) for row in c.execute("SELECT * FROM media")}
     db_paths = set(db_media.keys())
+    logger.info(f"Database contains {len(db_paths)} records.")
     
     logger.info("Scanning files on disk...")
     disk_paths = set()
@@ -144,23 +144,30 @@ def scan():
                     width, height, user_comment, exif = get_metadata(path, ftype)
                     files_to_update.append((size, mtime, user_comment, width, height, exif, path))
             
-            if processed_count % 10 == 0:
+            if processed_count % 100 == 0: # Log progress every 100 files
+                logger.info(f"Scan progress: {processed_count}/{total_files}")
                 update_scan_status(processed_count, total_files)
 
     update_scan_status(total_files, total_files)
+    logger.info("Disk scan complete. Preparing database updates.")
 
     if files_to_add:
+        logger.info(f"Adding {len(files_to_add)} new files to the database...")
         c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
     if files_to_update:
+        logger.info(f"Updating {len(files_to_update)} existing files in the database...")
         c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=? WHERE path=?", files_to_update)
 
     paths_to_delete = db_paths - disk_paths
     if paths_to_delete:
+        logger.info(f"Removing {len(paths_to_delete)} deleted files from the database...")
         c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
 
+    logger.info("Committing changes to the database...")
     conn.commit()
     conn.close()
-    logger.info("Library scan finished.")
+    end_time = time.time()
+    logger.info(f"Library scan finished in {end_time - start_time:.2f} seconds.")
 
 def get_metadata(path, ftype):
     """Helper function to get all metadata for a file."""
