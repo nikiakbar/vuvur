@@ -8,7 +8,7 @@ services:
       - "5005:5000"
     volumes:
       # core requirements
-      # - /srv/vuvur/data:/app/data
+      - vuvur_test:/app/data
 
       - /mnt/z/Locals/system/outputs/txt2img-images/2025-08:/mnt/gallery/images
       # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
@@ -47,3 +47,7 @@ services:
     restart: unless-stopped
     environment:
       - ZOOM_LEVEL=2.0
+
+volumes:
+  vuvur_test:
+  #docker rm volume vuvur_test

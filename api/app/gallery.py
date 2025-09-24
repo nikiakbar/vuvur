@@ -18,29 +18,32 @@ def gallery():
     conn = get_db()
     c = conn.cursor()
 
-    # ✅ MODIFICATION: Updated to use FTS for searching
+    # --- CORRECTED QUERY LOGIC ---
+    
     base_sql = "FROM media"
-    join_clause = ""
-    where_clause = ""
     params = []
-
+    
+    # If there's a search query, we must use the FTS table
     if query:
-        join_clause = " JOIN media_fts f ON media.id = f.rowid "
-        where_clause = " WHERE media_fts MATCH ? "
-        params.append(query)
+        # We select from the main media table but join with the FTS table to filter
+        count_sql = "SELECT COUNT(*) as cnt FROM media JOIN media_fts f ON media.id = f.rowid WHERE media_fts MATCH ?"
+        sql = "SELECT * FROM media JOIN media_fts f ON media.id = f.rowid WHERE media_fts MATCH ?"
+        # Add the wildcard to the search term for prefix matching
+        params.append(f'{query}*')
+    else:
+        # If no query, use the simpler queries
+        count_sql = "SELECT COUNT(*) as cnt FROM media"
+        sql = "SELECT * FROM media"
 
     # Get total count for pagination
-    count_sql = "SELECT COUNT(*) as cnt " + base_sql + join_clause + where_clause
     c.execute(count_sql, tuple(params))
     total_row = c.fetchone()
     total_items = total_row["cnt"] if total_row else 0
     total_pages = (total_items + limit - 1) // limit
 
-    # Build the main query for fetching items
-    sql = "SELECT * " + base_sql + join_clause + where_clause
-
     # Handle sorting
-    if sort == "random":
+    # Note: Random search is less efficient with FTS, but will still work
+    if sort == "random" and not query:
         sql += " ORDER BY RANDOM()"
     elif sort == "date_desc":
         sql += " ORDER BY mtime DESC"
@@ -50,16 +53,16 @@ def gallery():
         sql += " ORDER BY filename ASC"
     elif sort == "file_desc":
         sql += " ORDER BY filename DESC"
-    else: # Default to random if sort is unknown
-        sql += " ORDER BY RANDOM()"
-
+    
     # Add pagination
     sql += " LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     c.execute(sql, tuple(params))
     
-    # ✅ FIX: Decode the exif string into a dictionary
+    # --- END CORRECTION ---
+
+    # Decode the exif string into a dictionary
     items = []
     for row in c.fetchall():
         item = dict(row)

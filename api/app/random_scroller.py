@@ -37,7 +37,7 @@ def random_single():
             WHERE media_fts MATCH ?
             ORDER BY RANDOM() 
             LIMIT 1
-        """, (q,))
+        """, (f'{q}*',))
         item = c.fetchone()
     else:
         # If no query, get a random item from the entire library

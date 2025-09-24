@@ -20,7 +20,7 @@ def search():
         FROM media
         WHERE filename LIKE ? OR user_comment LIKE ? OR exif LIKE ?
         LIMIT 100
-    """, (f"%{q}%", f"%{q}%", f"%{q}%"))
+    """, (f'{q}*',))
     results = [dict(r) for r in c.fetchall()]
     conn.close()
 
