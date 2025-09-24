@@ -59,7 +59,7 @@ function SettingsPage() {
         <h3>System Cache</h3>
         <p>This will delete all cached media and the database. A new library scan will start automatically.</p>
         <button onClick={handleCleanup} disabled={isCleaning} className="cleanup-button">
-          {isCleaning ? 'Cleaning...' : 'Clear All Caches & Re-Scan'}
+          {isCleaning ? 'Cleaning...' : 'Clear Caches & Re-Scan'}
         </button>
         {message && <p className="cleanup-message">{message}</p>}
       </div>
