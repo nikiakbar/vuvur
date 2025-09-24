@@ -14,15 +14,13 @@ def search():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # FTS MATCH query (fast full-text search)
+    # MODIFICATION HERE
     c.execute("""
-        SELECT m.id, m.filename, m.type, m.user_comment
-        FROM media_fts f
-        JOIN media m ON m.id = f.rowid
-        WHERE media_fts MATCH ?
-        ORDER BY rank
+        SELECT id, filename, type, user_comment
+        FROM media
+        WHERE filename LIKE ? OR user_comment LIKE ? OR exif LIKE ?
         LIMIT 100
-    """, (q,))
+    """, (f"%{q}%", f"%{q}%", f"%{q}%"))
     results = [dict(r) for r in c.fetchall()]
     conn.close()
 

@@ -9,6 +9,7 @@ import time  # Import the time module
 from app.db import DB_PATH
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+import piexif
 
 logger = logging.getLogger(__name__)
 
@@ -37,42 +38,57 @@ def get_video_dimensions(video_path):
 
 def extract_exif_data(image_path):
     """
-    Extracts metadata from an image, using the AUTOMATIC1111/stable-diffusion-webui logic.
-    For PNGs, it reads the 'parameters' text chunk.
-    For JPEGs, it falls back to reading standard EXIF.
+    Extracts metadata from an image, with specific, robust handling for the
+    UserComment encoding from AUTOMATIC1111 Stable Diffusion generations.
     """
     try:
-        with Image.open(image_path) as img:
-            if "parameters" in img.info:
-                user_comment = img.info["parameters"]
-                exif_json = json.dumps({"parameters": user_comment})
+        img = Image.open(image_path)
+        user_comment = None
+        exif_json = None
+        all_tags = {}
+
+        # For PNG files, the prompt is stored directly in the info dictionary
+        if "parameters" in img.info:
+            user_comment = img.info["parameters"]
+            all_tags["parameters"] = user_comment
+            exif_json = json.dumps(all_tags, default=str)
+            return exif_json, user_comment
+
+        # For JPEG/WebP, parse the raw EXIF data using piexif
+        if "exif" in img.info:
+            try:
+                exif_dict = piexif.load(img.info["exif"])
+                if "Exif" in exif_dict and piexif.ExifIFD.UserComment in exif_dict["Exif"]:
+                    comment_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
+                    
+                    # ✅ THIS IS THE DEFINITIVE FIX:
+                    # Manually clean the byte string to remove encoding headers and null bytes.
+                    
+                    # 1. Find the start of the actual text (skip headers like UNICODE, ASCII, etc.)
+                    try:
+                        text_start = comment_bytes.index(b'\x00\x00', 8) + 2
+                    except ValueError:
+                        text_start = 8 # Fallback for slightly different formats
+
+                    # 2. Get the raw text bytes
+                    raw_text_bytes = comment_bytes[text_start:]
+                    
+                    # 3. Filter out the interspersed null bytes
+                    cleaned_bytes = bytes([b for b in raw_text_bytes if b != 0])
+                    
+                    # 4. Decode the clean byte string
+                    user_comment = cleaned_bytes.decode('utf-8', errors='ignore')
+
+                    all_tags["UserComment"] = user_comment
+                    exif_json = json.dumps(all_tags, default=str)
+
                 return exif_json, user_comment
 
-            exif_data = img.getexif()
-            if exif_data:
-                from PIL import ExifTags
-                all_tags = {}
-                for key, val in exif_data.items():
-                    if key in ExifTags.TAGS:
-                        tag_name = ExifTags.TAGS[key]
-                        if isinstance(val, bytes):
-                           val = val.decode(errors='ignore')
-                        all_tags[tag_name] = val
-
-                exif_ifd = exif_data.get_ifd(ExifTags.IFD.Exif)
-                for key, val in exif_ifd.items():
-                    if key in ExifTags.TAGS:
-                        tag_name = ExifTags.TAGS[key]
-                        if isinstance(val, bytes):
-                           val = val.decode(errors='ignore')
-                        all_tags[tag_name] = val
-                
-                user_comment = all_tags.get("UserComment")
-                exif_json = json.dumps(all_tags, default=str)
-                return exif_json, user_comment
+            except Exception as e:
+                logger.warning(f"Piexif failed for {image_path}: {e}")
 
     except Exception as e:
-        logger.error(f"Could not extract metadata from {image_path}: {e}")
+        logger.error(f"Failed to extract metadata from {image_path}: {e}")
 
     return None, None
 
@@ -108,18 +124,38 @@ def scan():
     db_paths = set(db_media.keys())
     logger.info(f"Database contains {len(db_paths)} records.")
     
-    logger.info("Identifying files that need metadata extraction...")
+    logger.info("Identifying files that need processing (in parallel)...")
+    
     files_to_process = []
-    for path in all_disk_paths:
+    
+    # --- OPTIMIZATION: Parallelize the file status check ---
+    def check_file_status(path):
+        """Checks if a file is new or modified and returns it if so."""
         try:
             stat = os.stat(path)
-            if path not in db_paths or db_media[path]["size"] != stat.st_size or db_media[path]["mtime"] != stat.st_mtime:
-                files_to_process.append(path)
+            # Check if it's a new file OR an existing file with a different size or modification time
+            if path not in db_paths or \
+               db_media[path]["size"] != stat.st_size or \
+               db_media[path]["mtime"] != stat.st_mtime:
+                return path
         except FileNotFoundError:
-            continue
+            return None
+        return None
 
-    logger.info(f"Found {len(files_to_process)} new or modified files to process in parallel.")
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # This will run os.stat and the comparison for all files concurrently
+        results = executor.map(check_file_status, all_disk_paths)
+        # Filter out the None results for files that haven't changed
+        files_to_process = [path for path in results if path is not None]
 
+    logger.info(f"Found {len(files_to_process)} new or modified files to process for metadata.")
+
+    if not files_to_process:
+        logger.info("No new or modified files found. Scan complete.")
+        conn.close()
+        return
+
+    # --- Now process the identified files in parallel ---
     files_to_add = []
     files_to_update = []
 
@@ -139,10 +175,8 @@ def scan():
         results = executor.map(process_file_metadata, files_to_process)
         for i, data in enumerate(results):
             if data['path'] not in db_paths:
-                # Prepare data for insertion
                 files_to_add.append(tuple(data.values()))
             else:
-                # Prepare data for update
                 update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['path'])
                 files_to_update.append(update_data)
             

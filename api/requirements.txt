@@ -6,4 +6,4 @@ flasgger
 argon2-cffi
 filelock
 gevent
-# piexif
+piexif

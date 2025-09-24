@@ -10,7 +10,7 @@ services:
       # core requirements
       # - /srv/vuvur/data:/app/data
 
-      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
+      - /mnt/z/Locals/system/outputs/txt2img-images/2025-08:/mnt/gallery/images
       # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
       # - /mnt/z/Locals/system/liked:/mnt/gallery/liked
       # - /mnt/z/Locals/system/recyclebin:/mnt/gallery/recyclebin

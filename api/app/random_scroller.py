@@ -29,7 +29,7 @@ def random_single():
     
     item = None
     if q:
-        # Use the powerful FTS5 index for searching filenames and comments
+        # ✅ MODIFICATION: Reverted to the more efficient FTS5 query.
         c.execute("""
             SELECT m.*
             FROM media_fts f

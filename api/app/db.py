@@ -2,7 +2,7 @@ import sqlite3
 import os
 from argon2 import PasswordHasher, exceptions
 
-DB_PATH = os.environ.get("DB_PATH", "app.db")
+DB_PATH = os.environ.get("DB_PATH", "/app/data/app.db")
 ph = PasswordHasher()
 
 def get_db():
@@ -45,24 +45,24 @@ def init_db():
     # ---- Full Text Search (FTS5) for fast search on filename + user_comment ----
     c.execute("""
     CREATE VIRTUAL TABLE IF NOT EXISTS media_fts
-    USING fts5(filename, user_comment, content='media', content_rowid='id')
+    USING fts5(filename, user_comment, exif, content='media', content_rowid='id')
     """)
 
     # Keep FTS index in sync
     c.executescript("""
     CREATE TRIGGER IF NOT EXISTS media_ai AFTER INSERT ON media BEGIN
-      INSERT INTO media_fts(rowid, filename, user_comment)
-      VALUES (new.id, new.filename, new.user_comment);
+      INSERT INTO media_fts(rowid, filename, user_comment, exif)
+      VALUES (new.id, new.filename, new.user_comment, new.exif);
     END;
     CREATE TRIGGER IF NOT EXISTS media_ad AFTER DELETE ON media BEGIN
-      INSERT INTO media_fts(media_fts, rowid, filename, user_comment)
-      VALUES('delete', old.id, old.filename, old.user_comment);
+      INSERT INTO media_fts(media_fts, rowid, filename, user_comment, exif)
+      VALUES('delete', old.id, old.filename, old.user_comment, old.exif);
     END;
     CREATE TRIGGER IF NOT EXISTS media_au AFTER UPDATE ON media BEGIN
-      INSERT INTO media_fts(media_fts, rowid, filename, user_comment)
-      VALUES('delete', old.id, old.filename, old.user_comment);
-      INSERT INTO media_fts(rowid, filename, user_comment)
-      VALUES (new.id, new.filename, new.user_comment);
+      INSERT INTO media_fts(media_fts, rowid, filename, user_comment, exif)
+      VALUES('delete', old.id, old.filename, old.user_comment, old.exif);
+      INSERT INTO media_fts(rowid, filename, user_comment, exif)
+      VALUES (new.id, new.filename, new.user_comment, new.exif);
     END;
     """)
 

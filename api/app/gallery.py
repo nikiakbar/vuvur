@@ -18,25 +18,26 @@ def gallery():
     conn = get_db()
     c = conn.cursor()
 
-    # Base query parts
+    # ✅ MODIFICATION: Updated to use FTS for searching
     base_sql = "FROM media"
+    join_clause = ""
     where_clause = ""
     params = []
 
-    # Handle search query
     if query:
-        where_clause = " WHERE filename LIKE ? OR user_comment LIKE ?"
-        params.extend([f"%{query}%", f"%{query}%"])
+        join_clause = " JOIN media_fts f ON media.id = f.rowid "
+        where_clause = " WHERE media_fts MATCH ? "
+        params.append(query)
 
     # Get total count for pagination
-    count_sql = "SELECT COUNT(*) as cnt " + base_sql + where_clause
+    count_sql = "SELECT COUNT(*) as cnt " + base_sql + join_clause + where_clause
     c.execute(count_sql, tuple(params))
     total_row = c.fetchone()
     total_items = total_row["cnt"] if total_row else 0
     total_pages = (total_items + limit - 1) // limit
 
     # Build the main query for fetching items
-    sql = "SELECT * " + base_sql + where_clause
+    sql = "SELECT * " + base_sql + join_clause + where_clause
 
     # Handle sorting
     if sort == "random":
