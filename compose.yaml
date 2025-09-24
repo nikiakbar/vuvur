@@ -10,12 +10,12 @@ services:
       # core requirements
       # - /srv/vuvur/data:/app/data
 
-      # - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
+      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/images
       # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
       # - /mnt/z/Locals/system/liked:/mnt/gallery/liked
       # - /mnt/z/Locals/system/recyclebin:/mnt/gallery/recyclebin
       
-      - /mnt/z/Locals/system/outputs/samples-images/:/mnt/gallery/images
+      # - /mnt/z/Locals/system/outputs/samples-images/:/mnt/gallery/images
       - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
       - /mnt/z/Locals/system/outputs/samples-vids:/mnt/gallery/videos
       - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
@@ -27,11 +27,11 @@ services:
       - GALLERY_BATCH_SIZE=20
       - RANDOM_PRELOAD_COUNT=3
       - ENABLE_LOGIN=false
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/healthz"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:5000/healthz"]
+    #   interval: 5s
+    #   timeout: 5s
+    #   retries: 10
 
   portal:
     build:
@@ -40,9 +40,9 @@ services:
     pull_policy: always
     ports:
       - "5004:80"
-    depends_on:
-      api:
-        condition: service_healthy
+    # depends_on:
+    #   api:
+    #     condition: service_healthy
 
     restart: unless-stopped
     environment:
