@@ -6,7 +6,7 @@ import subprocess
 import json
 import concurrent.futures
 import time  # Import the time module
-from app.db import DB_PATH
+from app.db import DB_PATH, init_db
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 import piexif
@@ -99,6 +99,8 @@ def update_scan_status(progress, total):
         json.dump({"progress": progress, "total": total}, f)
 
 def scan():
+    init_db()
+    
     start_time = time.time()
     logger.info("Starting library scan...")
     conn = sqlite3.connect(DB_PATH)
