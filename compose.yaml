@@ -50,4 +50,4 @@ services:
 
 volumes:
   vuvur_test:
-  #docker rm volume vuvur_test
+  #docker rm volume vuvur_vuvur_test

@@ -41,11 +41,18 @@ def cleanup_cache():
         # To ensure a fresh scan, we must remove the flag file
         if os.path.exists(INITIAL_SCAN_FLAG_PATH):
             os.remove(INITIAL_SCAN_FLAG_PATH)
+        
+        # We also need to delete the database file to ensure a completely fresh start
+        db_path = os.environ.get("DB_PATH", "/app/data/app.db")
+        if os.path.exists(db_path):
+            os.remove(db_path)
+
         scan()
-        # ADD THIS BLOCK TO FIX THE ISSUE
-        # Re-create the flag file to signal that the scan is done
+        
+        # ✅ FIX: Re-create the flag file to signal that the scan is done
         with open(INITIAL_SCAN_FLAG_PATH, 'w') as f:
             f.write('done')
+            
         return jsonify({"message": "Library re-scan triggered successfully."}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
