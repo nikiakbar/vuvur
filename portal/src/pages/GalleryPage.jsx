@@ -19,6 +19,8 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [groups, setGroups] = useState([]); // State for quick-access groups
+  const [selectedGroup, setSelectedGroup] = useState(''); // State for active group
 
   // State for scan progress
   const [scanStatus, setScanStatus] = useState({
@@ -48,6 +50,22 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
 
     return () => clearInterval(intervalId);
   }, []);
+  
+  // Effect to fetch quick-access groups
+  useEffect(() => {
+    if (!scanStatus.scan_complete) return;
+
+    const fetchGroups = async () => {
+      try {
+        const response = await fetch('/api/gallery/groups');
+        const data = await response.json();
+        setGroups(data);
+      } catch (error) {
+        console.error("Failed to fetch groups:", error);
+      }
+    };
+    fetchGroups();
+  }, [scanStatus.scan_complete]);
 
   // Effect to fetch data when page, sort, or query changes
   useEffect(() => {
@@ -58,7 +76,8 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
       sort: sortBy,
       q: debouncedQuery,
       page: page,
-      limit: batchSize
+      limit: batchSize,
+      group: selectedGroup // Add group filter to API call
     });
 
     fetch(`/api/gallery?${params.toString()}`)
@@ -73,13 +92,13 @@ function GalleryPage({ showFullSize, setShowFullSize }) {
       .catch(() => {
         setIsLoading(false);
       });
-  }, [scanStatus.scan_complete, page, sortBy, debouncedQuery, batchSize]);
+  }, [scanStatus.scan_complete, page, sortBy, debouncedQuery, batchSize, selectedGroup]); // Add selectedGroup dependency
 
-  // Effect to reset the gallery when the user changes sort/search
+  // Effect to reset the gallery when the user changes sort/search/group
   useEffect(() => {
     setPage(1);
     setFiles([]);
-  }, [sortBy, debouncedQuery]);
+  }, [sortBy, debouncedQuery, selectedGroup]); // Add selectedGroup dependency
 
   // Infinite scroll observer
   const observer = useRef();
@@ -163,6 +182,26 @@ const handleDelete = async (fileId) => {
             <label htmlFor="full-size-toggle">Show Full-Size in Viewer</label>
         </div>
       </div>
+
+      {groups.length > 0 && (
+        <div className="quick-access-bar">
+          <button 
+            className={`quick-access-button ${selectedGroup === '' ? 'active' : ''}`}
+            onClick={() => setSelectedGroup('')}
+          >
+            All
+          </button>
+          {groups.map(group => (
+            <button 
+              key={group.group_tag}
+              className={`quick-access-button ${selectedGroup === group.group_tag ? 'active' : ''}`}
+              onClick={() => setSelectedGroup(group.group_tag)}
+            >
+              {group.group_tag} ({group.count})
+            </button>
+          ))}
+        </div>
+      )}
 
       <Gallery
         files={files}
