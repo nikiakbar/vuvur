@@ -225,6 +225,37 @@ body.no-scroll {
   margin: 1rem;
 }
 
+/* --- QUICK ACCESS BAR STYLES --- */
+.quick-access-bar {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 1rem 1rem 1rem;
+}
+
+.quick-access-button {
+  background-color: var(--card-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: 0.4em 1em;
+  border-radius: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: background-color 0.25s, border-color 0.25s, color 0.25s;
+}
+.quick-access-button:hover {
+  background-color: var(--bg-color);
+  border-color: var(--accent-color);
+}
+.quick-access-button.active {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  color: white;
+}
+/* --- END QUICK ACCESS BAR --- */
+
 .filter-input, .sort-select {
   padding: 0.6em;
   border-radius: 8px;

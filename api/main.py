@@ -1,3 +1,4 @@
+# /api/main.py
 from flask import Flask
 import os
 from flasgger import Swagger
@@ -7,7 +8,7 @@ import time
 from filelock import FileLock, Timeout
 
 from app.scanner import scan
-from app import auth, db, gallery, like, scan_api, search, stream, random_scroller, thumbnails, health
+from app import auth, db, gallery, groups, like, scan_api, search, stream, random_scroller, thumbnails, health
 from app import delete
 
 # Define paths globally for clarity
@@ -65,6 +66,7 @@ def create_app():
     # Register blueprints
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(gallery.bp)
+    app.register_blueprint(groups.bp)
     app.register_blueprint(like.bp)
     app.register_blueprint(scan_api.scan_bp)
     app.register_blueprint(search.search_bp)

@@ -14,22 +14,34 @@ def gallery():
     offset = (page - 1) * limit
     sort = request.args.get("sort", "random")
     query = request.args.get("q", "")
+    group = request.args.get("group", "") # New group filter
 
     conn = get_db()
     c = conn.cursor()
 
-    # --- CORRECTED QUERY AND SORTING LOGIC ---
+    # --- Dynamic Query Building ---
     
     params = []
+    where_conditions = []
+    base_sql = "FROM media"
+    join_sql = ""
     
-    # Start with the base selection and join if a query is present
     if query:
-        sql = "SELECT * FROM media JOIN media_fts f ON media.id = f.rowid WHERE media_fts MATCH ?"
-        count_sql = "SELECT COUNT(*) as cnt FROM media JOIN media_fts f ON media.id = f.rowid WHERE media_fts MATCH ?"
+        join_sql = "JOIN media_fts f ON media.id = f.rowid"
+        where_conditions.append("media_fts MATCH ?")
         params.append(f'{query}*')
-    else:
-        sql = "SELECT * FROM media"
-        count_sql = "SELECT COUNT(*) as cnt FROM media"
+    
+    if group:
+        where_conditions.append("group_tag = ?")
+        params.append(group)
+
+    where_sql = ""
+    if where_conditions:
+        where_sql = "WHERE " + " AND ".join(where_conditions)
+
+    # Build final SQL
+    sql = f"SELECT * {base_sql} {join_sql} {where_sql}"
+    count_sql = f"SELECT COUNT(*) as cnt {base_sql} {join_sql} {where_sql}"
 
     # Get total count for pagination
     c.execute(count_sql, tuple(params))

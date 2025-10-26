@@ -167,10 +167,15 @@ def scan():
         ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
         stat = os.stat(path)
         width, height, user_comment, exif = get_metadata(path, ftype)
+        
+        # Automatically determine the group tag
+        rel_path = os.path.relpath(path, GALLERY_PATH)
+        group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
+        
         return {
             "path": path, "filename": os.path.basename(path), "type": ftype,
             "size": stat.st_size, "mtime": stat.st_mtime, "user_comment": user_comment,
-            "width": width, "height": height, "exif": exif
+            "width": width, "height": height, "exif": exif, "group_tag": group_tag
         }
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -179,7 +184,7 @@ def scan():
             if data['path'] not in db_paths:
                 files_to_add.append(tuple(data.values()))
             else:
-                update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['path'])
+                update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
                 files_to_update.append(update_data)
             
             if (i + 1) % 100 == 0:
@@ -190,11 +195,11 @@ def scan():
 
     if files_to_add:
         logger.info(f"Adding {len(files_to_add)} new files to the database...")
-        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
+        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
 
     if files_to_update:
         logger.info(f"Updating {len(files_to_update)} existing files in the database...")
-        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=? WHERE path=?", files_to_update)
+        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
 
     paths_to_delete = db_paths - set(all_disk_paths)
     if paths_to_delete:
