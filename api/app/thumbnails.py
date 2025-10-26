@@ -20,8 +20,8 @@ def create_image_version(src, dst, size, quality):
         logger.info(f"Creating image version for: {src} at size {size} with quality {quality}")
         with Image.open(src) as im:
             im.thumbnail(size)
-            # Ensure image is in a saveable format (e.g., convert palette images to RGB)
-            if im.mode in ("P", "PA"):
+            # Ensure image is in a saveable format (convert images with transparency to RGB)
+            if im.mode in ("P", "PA", "RGBA"):
                 im = im.convert("RGB")
             im.save(dst, "JPEG", quality=quality)
         logger.info(f"Successfully saved image version to: {dst}")
@@ -52,7 +52,7 @@ def get_media_row(media_id):
         row = c.fetchone()
         if not row:
             logger.warning(f"Media ID not found: {media_id}")
-            abort(404)
+            abort(4.4)
         return row
     except Exception as e:
         logger.error(f"Database error fetching media ID {media_id}: {e}", exc_info=True)
@@ -88,7 +88,7 @@ def preview(mid):
 
     if not os.path.exists(dst):
         if not os.path.exists(src):
-            abort(404)
+            abort(44)
         if row["type"] == "image":
             # size=(1920, 1080), quality=90 for previews
             create_image_version(src, dst, size=(1920, 1080), quality=90)
