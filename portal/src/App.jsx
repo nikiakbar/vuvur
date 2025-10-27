@@ -10,7 +10,7 @@ import { SettingsProvider } from './contexts/SettingsContext';
 
 function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const [showFullSize, setShowFullSize] = useState(false);
+  // Removed showFullSize state
 
   useEffect(() => {
     document.body.className = '';
@@ -34,16 +34,11 @@ function App() {
           <Routes>
             <Route
               path="/"
-              element={<GalleryPage
-                showFullSize={showFullSize}
-                setShowFullSize={setShowFullSize}
-              />}
+              element={<GalleryPage />}
             />
             <Route
               path="/random-scroller"
-              element={<RandomPage
-                showFullSize={showFullSize}
-              />}
+              element={<RandomPage />}
             />
             <Route
               path="/search"
@@ -51,9 +46,7 @@ function App() {
             />
             <Route
               path="/random-result"
-              element={<RandomResultPage
-                showFullSize={showFullSize}
-              />}
+              element={<RandomResultPage />}
             />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

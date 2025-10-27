@@ -2,6 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 
 // A simple component to render the EXIF data table, now used internally
 const ExifTable = ({ data }) => {
+  // Check if data is null, empty, or just contains an error message
+  if (!data || Object.keys(data).length === 0 || (Object.keys(data).length === 1 && data.error)) {
+    return <p className="exif-message">No EXIF data available for this image.</p>;
+  }
+
   const renderValue = (key, value) => {
     if ((key === 'UserComment' || key === 'parameters') && typeof value === 'string') {
       const tags = value.split(',').map(tag => tag.trim()).filter(Boolean);
@@ -29,7 +34,7 @@ const ExifTable = ({ data }) => {
 };
 
 
-const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, showControls, zoomLevel }) => {
+const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
@@ -52,13 +57,16 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
         videoRef.current.currentTime = 0;
       }
     }
-    // Reset EXIF view when scrolling to a new slide
+    // Reset EXIF view and zoom when scrolling to a new slide
     if (index !== currentIndex) {
       setShowExif(false);
+      setIsZoomed(false); // Reset zoom
+      setCurrentPan({ x: 0, y: 0 }); // Reset pan
     }
   }, [currentIndex, index]);
 
-  const imageUrl = showFullSize ? `/api/stream/${file.id}` : `/api/preview/${file.id}`;
+  // Always use the full-size stream endpoint
+  const imageUrl = `/api/stream/${file.id}`;
   const videoUrl = `/api/stream/${file.id}`;
 
   const handlePointerDown = (clientX, clientY) => {
@@ -108,33 +116,45 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     onDelete();
   };
 
-  const handleMouseDown = (e) => {
-    if (slideInfoRef.current && slideInfoRef.current.contains(e.target)) return;
-    handlePointerDown(e.clientX, e.clientY);
+  // Stop propagation on info bar click so it doesn't trigger zoom/pan
+  const handleInfoBarClick = (e) => {
+    e.stopPropagation();
   };
 
-  const handleTouchStart = (e) => {
-    if (slideInfoRef.current && slideInfoRef.current.contains(e.target)) return;
-    if (e.touches.length === 1) handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
-  };
-
+  // Improved EXIF data retrieval
   const getExifData = () => {
-    if (file && file.type === 'image' && file.exif) {
-      try { return JSON.parse(file.exif); } 
-      catch (e) { return { error: 'Could not parse EXIF data.' }; }
+    // Check if file.exif exists and is a non-empty object or string
+    if (file && file.exif && typeof file.exif === 'object' && Object.keys(file.exif).length > 0) {
+       return file.exif; // Already an object from gallery load
     }
+    // If it's a non-empty string, try parsing (fallback)
+    if (file && file.exif && typeof file.exif === 'string' && file.exif.trim() !== '' && file.exif.trim() !== '{}') {
+      try {
+        const parsed = JSON.parse(file.exif);
+        // Ensure it's not an empty object after parsing
+        return Object.keys(parsed).length > 0 ? parsed : { error: 'No EXIF data found.' };
+      } catch (e) {
+        console.error("Could not parse EXIF string:", e);
+        return { error: 'Could not parse EXIF data.' };
+      }
+    }
+    // Return error object if no valid EXIF found
     return { error: 'No EXIF data found.' };
   };
+  
+  // Memoize the EXIF data object
+  const exifData = React.useMemo(() => getExifData(), [file]);
+
 
   return (
     <div className="viewer-slide">
       <div 
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
-        onMouseDown={handleMouseDown}
+        onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
         onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY, e)}
         onMouseUp={handlePointerUp}
         onMouseLeave={() => setIsDragging(false)}
-        onTouchStart={handleTouchStart}
+        onTouchStart={(e) => e.touches.length === 1 && handlePointerDown(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchMove={(e) => e.touches.length === 1 && handlePointerMove(e.touches[0].clientX, e.touches[0].clientY, e)}
         onTouchEnd={handlePointerUp}
         onTouchCancel={() => setIsDragging(false)}
@@ -160,17 +180,30 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
       </div>
 
       {showControls && index === currentIndex && (
-        <div className={`slide-info ${showExif ? 'expanded' : ''}`} ref={slideInfoRef}>
+        <div 
+          className={`slide-info ${showExif ? 'expanded' : ''}`} 
+          ref={slideInfoRef}
+          onClick={handleInfoBarClick} // Prevent click propagation
+        >
           {showExif ? (
-            <ExifTable data={getExifData()} />
+             // Pass the memoized exifData
+            <ExifTable data={exifData} />
           ) : (
-            <p className="viewer-filename">{file.path}</p>
+            // Filename removed from here
+            <div className="viewer-controls"> 
+              {file.type === 'image' && <button title="Show EXIF" onClick={handleShowExif}>ℹ️</button>}
+              <button title="Like" onClick={handleLikeClick}>❤️</button>
+              <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+            </div>
           )}
-          <div className="viewer-controls">
-            {file.type === 'image' && <button title="Show EXIF" onClick={handleShowExif}>ℹ️</button>}
-            <button title="Like" onClick={handleLikeClick}>❤️</button>
-            <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
-          </div>
+           {/* Controls moved inside the conditional rendering */}
+           {showExif && (
+             <div className="viewer-controls">
+                {file.type === 'image' && <button title="Hide EXIF" onClick={handleShowExif}>ℹ️</button>}
+                <button title="Like" onClick={handleLikeClick}>❤️</button>
+                <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+             </div>
+            )}
         </div>
       )}
     </div>

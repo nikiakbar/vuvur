@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import MediaSlide from '../components/MediaSlide';
 
-function RandomPage({ showFullSize, preloadCount, zoomLevel }) {
+function RandomPage({ preloadCount, zoomLevel }) { // Removed showFullSize
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const observer = useRef();
@@ -66,7 +66,7 @@ function RandomPage({ showFullSize, preloadCount, zoomLevel }) {
             <MediaSlide 
               file={file} 
               showControls={false} 
-              showFullSize={true} 
+              // showFullSize prop removed
               zoomLevel={zoomLevel}
             />
           </div>
