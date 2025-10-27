@@ -163,24 +163,34 @@ def scan():
 
     def process_file_metadata(path):
         """Wrapper function to get all data for a single file."""
-        ext = os.path.splitext(path)[1].lower()
-        ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
-        stat = os.stat(path)
-        width, height, user_comment, exif = get_metadata(path, ftype)
-        
-        # Automatically determine the group tag
-        rel_path = os.path.relpath(path, GALLERY_PATH)
-        group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
-        
-        return {
-            "path": path, "filename": os.path.basename(path), "type": ftype,
-            "size": stat.st_size, "mtime": stat.st_mtime, "user_comment": user_comment,
-            "width": width, "height": height, "exif": exif, "group_tag": group_tag
-        }
+        try:
+            ext = os.path.splitext(path)[1].lower()
+            ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
+            stat = os.stat(path)
+            width, height, user_comment, exif = get_metadata(path, ftype)
+            
+            # Automatically determine the group tag
+            rel_path = os.path.relpath(path, GALLERY_PATH)
+            group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
+            
+            return {
+                "path": path, "filename": os.path.basename(path), "type": ftype,
+                "size": stat.st_size, "mtime": stat.st_mtime, "user_comment": user_comment,
+                "width": width, "height": height, "exif": exif, "group_tag": group_tag
+            }
+        except FileNotFoundError:
+            logger.warning(f"File not found during metadata scan, skipping: {path}")
+            return None # Return None if file was deleted mid-scan
+        except Exception as e:
+            logger.error(f"Failed to process metadata for {path}: {e}")
+            return None
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(process_file_metadata, files_to_process)
         for i, data in enumerate(results):
+            if data is None: # Skip files that failed or were not found
+                continue
+                
             if data['path'] not in db_paths:
                 files_to_add.append(tuple(data.values()))
             else:
