@@ -1,4 +1,4 @@
-# /api/main.py
+# api/main.py
 from flask import Flask
 import os
 from flasgger import Swagger
@@ -8,7 +8,8 @@ import time
 from filelock import FileLock, Timeout
 
 from app.scanner import scan
-from app import auth, db, gallery, groups, like, scan_api, search, stream, random_scroller, thumbnails, health
+# ✅ Import subgroups
+from app import auth, db, gallery, groups, subgroups, like, scan_api, search, stream, random_scroller, thumbnails, health
 from app import delete
 
 # Define paths globally for clarity
@@ -26,7 +27,7 @@ def run_scanner_manager():
     if interval == 0:
         logging.info("SCAN_INTERVAL is 0. Periodic scanning is disabled.")
         return
-        
+
     logging.info(f"Periodic scanner will run every {interval} seconds.")
     while True:
         time.sleep(interval)
@@ -37,7 +38,10 @@ def run_scanner_manager():
                 logging.info("Periodic background scan finished.")
         except Timeout:
             logging.warning("Could not acquire lock for periodic scan; it may be running in another process.")
-        
+        except Exception as e:
+             logging.error(f"Error during periodic background scan: {e}", exc_info=True)
+
+
 def create_app():
     """Create and configure an instance of the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
@@ -51,7 +55,7 @@ def create_app():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+
     # Ensure the instance and data folders exist
     try:
         os.makedirs(app.instance_path, exist_ok=True)
@@ -67,6 +71,7 @@ def create_app():
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(gallery.bp)
     app.register_blueprint(groups.bp)
+    app.register_blueprint(subgroups.bp) # ✅ Register subgroups blueprint
     app.register_blueprint(like.bp)
     app.register_blueprint(scan_api.scan_bp)
     app.register_blueprint(search.search_bp)

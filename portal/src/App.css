@@ -1,3 +1,4 @@
+/* portal/src/App.css */
 /* --- THEME VARIABLES --- */
 :root {
   /* Light Theme (Default) */
@@ -231,7 +232,22 @@ body.no-scroll {
   justify-content: center;
   flex-wrap: wrap;
   gap: 0.5rem;
-  padding: 0 1rem 1rem 1rem;
+  padding: 0 1rem 0.5rem 1rem; /* Reduced bottom padding */
+}
+/* Add margin between group and subgroup bars */
+.group-bar {
+    margin-bottom: 0.5rem;
+}
+.subgroup-bar {
+    padding-left: 2rem; /* Indent subgroup bar slightly */
+    padding-right: 2rem;
+    min-height: 30px; /* Prevent layout shift while loading */
+    align-items: center; /* Center loading text vertically */
+}
+.loading-subgroups {
+    font-size: 0.85rem;
+    font-style: italic;
+    opacity: 0.7;
 }
 
 .quick-access-button {
@@ -381,23 +397,22 @@ body.no-scroll {
   height: 100vh; width: 100%;
   scroll-snap-align: start;
   display: flex; flex-direction: column;
-  /* Removed justify-content and align-items */
   position: relative; box-sizing: border-box;
-  padding-bottom: 10px; /* Reduced bottom padding slightly */
+  padding-bottom: 10px;
 }
 .viewer-image-container {
   height: 100%; width: 100%;
   display: flex; justify-content: center; align-items: center;
-  overflow: hidden; 
-  flex-grow: 1; /* Make image container take up available space */
-  min-height: 0; /* Fix for flexbox overflow */
+  overflow: hidden;
+  flex-grow: 1;
+  min-height: 0;
 }
 .viewer-image-container.zoomed {
   overflow: auto;
   cursor: zoom-out;
 }
 .viewer-image-container img {
-  max-width: 95vw; max-height: 100%; /* Max height respects flex container */
+  max-width: 95vw; max-height: 100%;
   object-fit: contain;
   border-radius: 4px;
   will-change: transform;
@@ -412,47 +427,46 @@ body.no-scroll {
 }
 .viewer-image-container video {
   max-width: 95vw;
-  max-height: 100%; /* Max height respects flex container */
+  max-height: 100%;
   outline: none;
 }
 .slide-info {
-  position: relative; 
-  margin: 1.5rem auto 0 auto; /* Increased top margin */
+  position: relative;
+  margin: 1.5rem auto 0 auto;
   background-color: rgba(0, 0, 0, 0.8);
-  padding: 8px 15px; /* Reduced padding slightly */
+  padding: 8px 15px;
   border-radius: 12px;
   text-align: center;
   width: auto;
-  max-width: 95vw; 
+  max-width: 95vw;
   color: #ccc;
   transition: all 0.3s ease;
-  max-height: 70px; /* Default max height */
+  max-height: 70px; /* Adjusted based on reduced button size */
   overflow: hidden;
-  flex-shrink: 0; 
+  flex-shrink: 0;
 }
 
 .slide-info.expanded {
-  max-height: 50vh; 
+  max-height: 50vh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
-/* Filename style removed */
 .viewer-controls {
   position: static; background-color: transparent;
   border: none; padding: 0;
-  margin-top: 5px; /* Reduced margin slightly */
-  gap: 1.25rem; /* Reduced gap slightly */
+  margin-top: 5px;
+  gap: 1.25rem;
   display: flex; justify-content: center;
-  align-items: center; /* Vertically align buttons */
+  align-items: center;
 }
 .viewer-controls button {
   background: transparent; border: none;
   color: white; cursor: pointer;
-  font-size: 1.3rem; /* Reduced font size */
+  font-size: 1.3rem;
   transition: color 0.2s, transform 0.2s;
-  padding: 0.4rem; /* Reduced padding */
+  padding: 0.4rem;
   line-height: 1;
 }
 .viewer-controls button:hover { color: #87ceeb; transform: scale(1.1); }
@@ -530,31 +544,34 @@ body.no-scroll {
 .search-tip { font-size: 0.9rem; opacity: 0.7; }
 .inline-link { color: var(--accent-color); text-decoration: underline; margin-left: 0.5rem; }
 
-/* --- REMOVED .exif-overlay and .exif-content STYLES --- */
 
-/* --- NEW STYLES for Embedded EXIF Table --- */
+/* --- STYLES for Embedded EXIF Table --- */
 .exif-table-embedded {
   font-size: 0.85rem;
   word-break: break-all;
   text-align: left;
   overflow-y: auto;
   height: 100%;
-  color: var(--text-color);
-  background: var(--header-bg);
+  color: var(--text-color); /* Use text color for light/dark mode */
+  background: var(--card-bg); /* Use card background for light/dark mode */
   padding: 1rem;
   border-radius: 8px;
-  margin-bottom: 1rem;
+  margin-bottom: 1rem; /* Space between table and buttons */
 }
-.exif-message { /* Style for the "No EXIF" message */
+.exif-message {
   padding: 1rem;
   text-align: center;
   font-style: italic;
   opacity: 0.8;
+  color: var(--text-color); /* Ensure text color respects theme */
+  background: var(--card-bg); /* Match background */
+  border-radius: 8px;
+   margin-bottom: 1rem; /* Space between message and buttons */
 }
 
 .exif-row {
-  display: grid; grid-template-columns: 1fr 2fr;
-  gap: 1rem;
+  display: grid; grid-template-columns: auto 1fr; /* Adjust columns */
+  gap: 0.5rem 1rem; /* Adjust gap */
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border-color);
 }
@@ -563,13 +580,18 @@ body.no-scroll {
   font-weight: bold;
   color: var(--accent-color);
   font-family: monospace;
+  white-space: nowrap; /* Prevent key wrapping */
 }
+.exif-value {
+   word-break: break-word; /* Allow long values to wrap */
+}
+
 
 /* --- TAG STYLES --- */
 .tag-container { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .tag-badge {
   background-color: var(--tag-bg);
-  color: var(--text-color);
+  color: var(--tag-text);
   padding: 0.25rem 0.6rem;
   border-radius: 1rem;
   font-size: 0.75rem;
