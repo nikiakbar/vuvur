@@ -381,20 +381,23 @@ body.no-scroll {
   height: 100vh; width: 100%;
   scroll-snap-align: start;
   display: flex; flex-direction: column;
-  justify-content: center; align-items: center;
+  /* Removed justify-content and align-items */
   position: relative; box-sizing: border-box;
+  padding-bottom: 20px; /* Add padding for controls */
 }
 .viewer-image-container {
   height: 100%; width: 100%;
   display: flex; justify-content: center; align-items: center;
   overflow: hidden; 
+  flex-grow: 1; /* Make image container take up available space */
+  min-height: 0; /* Fix for flexbox overflow */
 }
 .viewer-image-container.zoomed {
   overflow: auto;
   cursor: zoom-out;
 }
 .viewer-image-container img {
-  max-width: 95vw; max-height: 100vh;
+  max-width: 95vw; max-height: 100%; /* Max height respects flex container */
   object-fit: contain;
   border-radius: 4px;
   will-change: transform;
@@ -409,29 +412,28 @@ body.no-scroll {
 }
 .viewer-image-container video {
   max-width: 95vw;
-  max-height: 100vh;
+  max-height: 100%; /* Max height respects flex container */
   outline: none;
 }
 .slide-info {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative; /* Changed from absolute */
+  /* Removed bottom, left, transform, z-index */
+  margin: 1rem auto 0 auto; /* Margin-top to push it below image */
   background-color: rgba(0, 0, 0, 0.8);
   padding: 10px 20px;
   border-radius: 12px;
   text-align: center;
   width: auto;
-  max-width: 80%;
-  z-index: 5;
+  max-width: 95vw; /* Match image max width */
   color: #ccc;
   transition: all 0.3s ease;
   max-height: 70px; /* Default max height */
   overflow: hidden;
+  flex-shrink: 0; /* Don't let the info box shrink */
 }
 
 .slide-info.expanded {
-  bottom: 20px;
+  /* Removed bottom */
   max-height: 50vh; /* Expanded height */
   display: flex;
   flex-direction: column;
@@ -565,7 +567,7 @@ body.no-scroll {
 .tag-container { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .tag-badge {
   background-color: var(--tag-bg);
-  color: var(--tag-text);
+  color: var(--text-color);
   padding: 0.25rem 0.6rem;
   border-radius: 1rem;
   font-size: 0.75rem;

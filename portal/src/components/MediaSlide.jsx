@@ -109,14 +109,9 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
     onDelete();
   };
 
-  const handleMouseDown = (e) => {
-    if (slideInfoRef.current && slideInfoRef.current.contains(e.target)) return;
-    handlePointerDown(e.clientX, e.clientY);
-  };
-
-  const handleTouchStart = (e) => {
-    if (slideInfoRef.current && slideInfoRef.current.contains(e.target)) return;
-    if (e.touches.length === 1) handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+  // Stop propagation on info bar click so it doesn't trigger zoom/pan
+  const handleInfoBarClick = (e) => {
+    e.stopPropagation();
   };
 
   const getExifData = () => {
@@ -131,11 +126,11 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
     <div className="viewer-slide">
       <div 
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
-        onMouseDown={handleMouseDown}
+        onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
         onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY, e)}
         onMouseUp={handlePointerUp}
         onMouseLeave={() => setIsDragging(false)}
-        onTouchStart={handleTouchStart}
+        onTouchStart={(e) => e.touches.length === 1 && handlePointerDown(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchMove={(e) => e.touches.length === 1 && handlePointerMove(e.touches[0].clientX, e.touches[0].clientY, e)}
         onTouchEnd={handlePointerUp}
         onTouchCancel={() => setIsDragging(false)}
@@ -161,7 +156,11 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
       </div>
 
       {showControls && index === currentIndex && (
-        <div className={`slide-info ${showExif ? 'expanded' : ''}`} ref={slideInfoRef}>
+        <div 
+          className={`slide-info ${showExif ? 'expanded' : ''}`} 
+          ref={slideInfoRef}
+          onClick={handleInfoBarClick} // Add click handler here
+        >
           {showExif ? (
             <ExifTable data={getExifData()} />
           ) : (
