@@ -42,6 +42,11 @@ def extract_exif_data(image_path):
     UserComment encoding from AUTOMATIC1111 Stable Diffusion generations.
     """
     try:
+        # Check if it's a GIF early, as Pillow's EXIF handling for GIF is limited
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext == '.gif':
+            return None, None # GIFs generally don't have standard EXIF
+
         img = Image.open(image_path)
         user_comment = None
         exif_json = None
@@ -66,21 +71,31 @@ def extract_exif_data(image_path):
                     
                     # 1. Find the start of the actual text (skip headers like UNICODE, ASCII, etc.)
                     try:
-                        text_start = comment_bytes.index(b'\x00\x00', 8) + 2
+                        # Look for common patterns indicating start of text
+                        if comment_bytes.startswith(b'UNICODE\x00'):
+                             text_start = 8
+                        elif comment_bytes.startswith(b'ASCII\x00\x00\x00'):
+                             text_start = 8
+                        elif b'\x00\x00' in comment_bytes[8:]:
+                             text_start = comment_bytes.index(b'\x00\x00', 8) + 2
+                        else:
+                             text_start = 0 # Fallback if no header found
                     except ValueError:
                         text_start = 8 # Fallback for slightly different formats
 
                     # 2. Get the raw text bytes
                     raw_text_bytes = comment_bytes[text_start:]
                     
-                    # 3. Filter out the interspersed null bytes
+                    # 3. Filter out the interspersed null bytes common in some encodings
                     cleaned_bytes = bytes([b for b in raw_text_bytes if b != 0])
                     
                     # 4. Decode the clean byte string
-                    user_comment = cleaned_bytes.decode('utf-8', errors='ignore')
+                    user_comment = cleaned_bytes.decode('utf-8', errors='ignore').strip()
 
                     all_tags["UserComment"] = user_comment
-                    exif_json = json.dumps(all_tags, default=str)
+                    # Only save if we actually got a comment
+                    if user_comment:
+                         exif_json = json.dumps(all_tags, default=str)
 
                 return exif_json, user_comment
 
@@ -109,7 +124,8 @@ def scan():
 
     logger.info("Discovering all files on disk...")
     all_disk_paths = []
-    valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
+    # Added .gif to valid extensions
+    valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
     for root, _, files in os.walk(GALLERY_PATH):
         if RECYCLEBIN_PATH in root:
             continue
@@ -165,7 +181,8 @@ def scan():
         """Wrapper function to get all data for a single file."""
         try:
             ext = os.path.splitext(path)[1].lower()
-            ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"} else "video"
+            # Updated image types check to include GIF
+            ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"} else "video"
             stat = os.stat(path)
             width, height, user_comment, exif = get_metadata(path, ftype)
             
@@ -185,21 +202,26 @@ def scan():
             logger.error(f"Failed to process metadata for {path}: {e}")
             return None
 
+    processed_count = 0
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = executor.map(process_file_metadata, files_to_process)
-        for i, data in enumerate(results):
+        for data in results:
+            processed_count += 1
             if data is None: # Skip files that failed or were not found
                 continue
                 
             if data['path'] not in db_paths:
                 files_to_add.append(tuple(data.values()))
             else:
+                # Ensure the order matches the UPDATE statement
                 update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
                 files_to_update.append(update_data)
             
-            if (i + 1) % 100 == 0:
-                logger.info(f"Metadata extraction progress: {i + 1}/{len(files_to_process)}")
-                update_scan_status(i + 1, len(files_to_process))
+            if processed_count % 100 == 0:
+                logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
+                update_scan_status(processed_count, len(files_to_process))
+                
+    update_scan_status(len(files_to_process), len(files_to_process)) # Final update
 
     logger.info("Metadata extraction complete. Preparing database updates.")
 

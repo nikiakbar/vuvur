@@ -383,7 +383,7 @@ body.no-scroll {
   display: flex; flex-direction: column;
   /* Removed justify-content and align-items */
   position: relative; box-sizing: border-box;
-  padding-bottom: 20px; /* Add padding for controls */
+  padding-bottom: 10px; /* Reduced bottom padding slightly */
 }
 .viewer-image-container {
   height: 100%; width: 100%;
@@ -416,48 +416,44 @@ body.no-scroll {
   outline: none;
 }
 .slide-info {
-  position: relative; /* Changed from absolute */
-  /* Removed bottom, left, transform, z-index */
-  margin: 1rem auto 0 auto; /* Margin-top to push it below image */
+  position: relative; 
+  margin: 1.5rem auto 0 auto; /* Increased top margin */
   background-color: rgba(0, 0, 0, 0.8);
-  padding: 10px 20px;
+  padding: 8px 15px; /* Reduced padding slightly */
   border-radius: 12px;
   text-align: center;
   width: auto;
-  max-width: 95vw; /* Match image max width */
+  max-width: 95vw; 
   color: #ccc;
   transition: all 0.3s ease;
   max-height: 70px; /* Default max height */
   overflow: hidden;
-  flex-shrink: 0; /* Don't let the info box shrink */
+  flex-shrink: 0; 
 }
 
 .slide-info.expanded {
-  /* Removed bottom */
-  max-height: 50vh; /* Expanded height */
+  max-height: 50vh; 
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
-.viewer-filename {
-  font-family: monospace;
-  margin: 0 0 10px 0;
-  word-break: break-all;
-}
+/* Filename style removed */
 .viewer-controls {
   position: static; background-color: transparent;
   border: none; padding: 0;
-  margin-top: 10px;
-  gap: 1.5rem;
+  margin-top: 5px; /* Reduced margin slightly */
+  gap: 1.25rem; /* Reduced gap slightly */
   display: flex; justify-content: center;
+  align-items: center; /* Vertically align buttons */
 }
 .viewer-controls button {
   background: transparent; border: none;
   color: white; cursor: pointer;
-  font-size: 1.5rem;
+  font-size: 1.3rem; /* Reduced font size */
   transition: color 0.2s, transform 0.2s;
-  padding: 0.5rem; line-height: 1;
+  padding: 0.4rem; /* Reduced padding */
+  line-height: 1;
 }
 .viewer-controls button:hover { color: #87ceeb; transform: scale(1.1); }
 .close-button {
@@ -548,6 +544,12 @@ body.no-scroll {
   padding: 1rem;
   border-radius: 8px;
   margin-bottom: 1rem;
+}
+.exif-message { /* Style for the "No EXIF" message */
+  padding: 1rem;
+  text-align: center;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .exif-row {
