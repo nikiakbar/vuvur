@@ -1,17 +1,18 @@
+// portal/src/pages/GalleryPage.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Gallery from '../components/Gallery';
 import Viewer from '../components/Viewer';
 import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 
-function GalleryPage() { // Removed showFullSize props
-  const batchSize = 20;
-  const zoomLevel = 2.5;
+function GalleryPage() {
+  const batchSize = 20; // Consider making this configurable via env var if needed
+  const zoomLevel = 2.5; // Consider making this configurable via env var if needed
 
   // State for gallery data
   const [files, setFiles] = useState([]);
-  const [initialIndex, setInitialIndex] = useState(null); // Changed from currentIndex
-  
+  const [initialIndex, setInitialIndex] = useState(null);
+
   // State for controls and pagination
   const [sortBy, setSortBy] = useState('random');
   const [query, setQuery] = useState('');
@@ -19,8 +20,12 @@ function GalleryPage() { // Removed showFullSize props
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [groups, setGroups] = useState([]); // State for quick-access groups
-  const [selectedGroup, setSelectedGroup] = useState(''); // State for active group
+  const [groups, setGroups] = useState([]); // Top-level groups
+  const [selectedGroup, setSelectedGroup] = useState(''); // Active top-level group
+  const [subgroups, setSubgroups] = useState([]); // Second-level subgroups
+  const [selectedSubgroup, setSelectedSubgroup] = useState(''); // Active subgroup
+  const [isLoadingSubgroups, setIsLoadingSubgroups] = useState(false);
+
 
   // State for scan progress
   const [scanStatus, setScanStatus] = useState({
@@ -34,6 +39,7 @@ function GalleryPage() { // Removed showFullSize props
     const checkScanStatus = async () => {
       try {
         const response = await fetch('/api/scan/status');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         setScanStatus(data);
         if (data.scan_complete) {
@@ -41,7 +47,9 @@ function GalleryPage() { // Removed showFullSize props
         }
       } catch (error) {
         console.error("Failed to check scan status:", error);
-        setScanStatus(prev => ({ ...prev, scan_complete: true })); // Stop on error
+        // Assume scan complete on error to avoid blocking UI indefinitely
+        setScanStatus(prev => ({ ...prev, scan_complete: true }));
+        clearInterval(intervalId); // Stop polling on error
       }
     };
 
@@ -50,14 +58,15 @@ function GalleryPage() { // Removed showFullSize props
 
     return () => clearInterval(intervalId);
   }, []);
-  
-  // Effect to fetch quick-access groups
+
+  // Effect to fetch top-level groups
   useEffect(() => {
     if (!scanStatus.scan_complete) return;
 
     const fetchGroups = async () => {
       try {
         const response = await fetch('/api/gallery/groups');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         setGroups(data);
       } catch (error) {
@@ -67,7 +76,34 @@ function GalleryPage() { // Removed showFullSize props
     fetchGroups();
   }, [scanStatus.scan_complete]);
 
-  // Effect to fetch data when page, sort, or query changes
+   // Effect to fetch subgroups when a top-level group is selected
+  useEffect(() => {
+    if (!selectedGroup) {
+      setSubgroups([]); // Clear subgroups if no group is selected
+      setSelectedSubgroup(''); // Clear subgroup selection
+      return;
+    }
+
+    const fetchSubgroups = async () => {
+       setIsLoadingSubgroups(true);
+      try {
+        const params = new URLSearchParams({ group: selectedGroup });
+        const response = await fetch(`/api/gallery/subgroups?${params.toString()}`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        setSubgroups(data);
+      } catch (error) {
+        console.error(`Failed to fetch subgroups for ${selectedGroup}:`, error);
+        setSubgroups([]); // Clear on error
+      } finally {
+          setIsLoadingSubgroups(false);
+      }
+    };
+    fetchSubgroups();
+  }, [selectedGroup]); // Re-run when selectedGroup changes
+
+
+  // Effect to fetch gallery data (now depends on subgroup too)
   useEffect(() => {
     if (!scanStatus.scan_complete) return;
 
@@ -77,33 +113,51 @@ function GalleryPage() { // Removed showFullSize props
       q: debouncedQuery,
       page: page,
       limit: batchSize,
-      group: selectedGroup // Add group filter to API call
+      group: selectedGroup,
+      subgroup: selectedSubgroup // Pass selected subgroup
     });
 
     fetch(`/api/gallery?${params.toString()}`)
-      .then(res => res.json())
+      .then(res => {
+         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+         return res.json();
+      })
       .then(data => {
         if (data && data.items && Array.isArray(data.items)) {
           setFiles(prev => (page === 1 ? data.items : [...prev, ...data.items]));
           setHasMore(page < data.total_pages);
+        } else {
+             // Handle case where API might return unexpected structure
+             console.warn("Received unexpected data structure from /api/gallery:", data);
+             setFiles(prev => (page === 1 ? [] : prev)); // Clear on page 1 if data bad
+             setHasMore(false);
         }
         setIsLoading(false);
       })
-      .catch(() => {
+      .catch((error) => {
+         console.error("Failed to fetch gallery:", error);
         setIsLoading(false);
+         // Optionally show an error message to the user here
       });
-  }, [scanStatus.scan_complete, page, sortBy, debouncedQuery, batchSize, selectedGroup]); // Add selectedGroup dependency
+      // Add selectedSubgroup dependency
+  }, [scanStatus.scan_complete, page, sortBy, debouncedQuery, batchSize, selectedGroup, selectedSubgroup]);
 
-  // Effect to reset the gallery when the user changes sort/search/group
+  // Effect to reset gallery/pagination when filters change
   useEffect(() => {
     setPage(1);
     setFiles([]);
-  }, [sortBy, debouncedQuery, selectedGroup]); // Add selectedGroup dependency
+    // Only reset subgroup if the main group changes
+    if (selectedSubgroup && !selectedGroup) {
+         setSelectedSubgroup('');
+    }
+     // Add selectedSubgroup dependency
+  }, [sortBy, debouncedQuery, selectedGroup, selectedSubgroup]);
 
-  // Infinite scroll observer
+  // Infinite scroll observer (no changes needed here)
   const observer = useRef();
   const lastImageElementRef = useCallback(node => {
-    if (isLoading) return;
+     // ... (observer logic remains the same) ...
+     if (isLoading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore) {
@@ -116,39 +170,47 @@ function GalleryPage() { // Removed showFullSize props
 
   // --- Action Handlers ---
   const handleLike = async (fileId) => {
-    try {
+     // ... (like logic remains the same) ...
+     try {
       await fetch(`/api/toggle_like/${fileId}`, { method: 'POST' });
       setFiles(files.filter(f => f.id !== fileId));
-      if (files.length === 1) setInitialIndex(null);
+      if (files.length === 1) setInitialIndex(null); // Close viewer if last image removed
+      // Adjust index if needed after deletion (more complex, skip for now)
     } catch (error) {
       console.error("Failed to like file:", error);
     }
   };
 
-const handleDelete = async (fileId) => {
-    // The confirmation "if" statement has been removed.
-    try {
-      // Call the backend endpoint immediately
+  const handleDelete = async (fileId) => {
+     // ... (delete logic remains the same) ...
+      try {
       const response = await fetch(`/api/delete/${fileId}`, { method: 'POST' });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to delete file.');
       }
-
-      // If the API call is successful, then update the UI
       setFiles(files.filter(f => f.id !== fileId));
-      // Close the viewer if the last image was deleted
-      if (files.length === 1) setInitialIndex(null);
-
+      if (files.length === 1) setInitialIndex(null); // Close viewer if last image removed
+       // Adjust index if needed after deletion (more complex, skip for now)
     } catch (error) {
       console.error("Failed to delete file:", error);
-      alert(`Error: ${error.message}`); // Show an error message to the user
+      alert(`Error: ${error.message}`);
     }
   };
 
   const openViewer = (index) => setInitialIndex(index);
   const closeViewer = () => setInitialIndex(null);
+
+  // --- Filter Selection Handlers ---
+   const handleGroupSelect = (groupTag) => {
+       setSelectedGroup(groupTag);
+       setSelectedSubgroup(''); // Reset subgroup when main group changes
+   };
+
+   const handleSubgroupSelect = (subgroupTag) => {
+        setSelectedSubgroup(subgroupTag);
+   };
+
 
   // --- Render Logic ---
   if (!scanStatus.scan_complete) {
@@ -157,8 +219,10 @@ const handleDelete = async (fileId) => {
 
   return (
     <>
+      {/* Search and Sort Bar (remains the same) */}
       <div className="controls-bar settings">
-        <input
+         {/* ... (input and select elements remain the same) ... */}
+         <input
           type="text"
           placeholder="Search filename or EXIF..."
           className="filter-input"
@@ -172,22 +236,22 @@ const handleDelete = async (fileId) => {
           <option value="file_asc">Filename (A-Z)</option>
           <option value="file_desc">Filename (Z-A)</option>
         </select>
-        {/* Removed the "Show Full-Size" checkbox div */}
       </div>
 
+      {/* Top-Level Group Buttons */}
       {groups.length > 0 && (
-        <div className="quick-access-bar">
-          <button 
+        <div className="quick-access-bar group-bar">
+          <button
             className={`quick-access-button ${selectedGroup === '' ? 'active' : ''}`}
-            onClick={() => setSelectedGroup('')}
+            onClick={() => handleGroupSelect('')}
           >
             All
           </button>
           {groups.map(group => (
-            <button 
+            <button
               key={group.group_tag}
               className={`quick-access-button ${selectedGroup === group.group_tag ? 'active' : ''}`}
-              onClick={() => setSelectedGroup(group.group_tag)}
+              onClick={() => handleGroupSelect(group.group_tag)}
             >
               {group.group_tag} ({group.count})
             </button>
@@ -195,13 +259,44 @@ const handleDelete = async (fileId) => {
         </div>
       )}
 
+       {/* Subgroup Buttons (only show if a group is selected and subgroups exist or are loading) */}
+       {(selectedGroup && (subgroups.length > 0 || isLoadingSubgroups)) && (
+           <div className="quick-access-bar subgroup-bar">
+               {isLoadingSubgroups ? (
+                   <span className="loading-subgroups">Loading subfolders...</span>
+               ) : (
+                   <>
+                       <button
+                           className={`quick-access-button ${selectedSubgroup === '' ? 'active' : ''}`}
+                           onClick={() => handleSubgroupSelect('')}
+                       >
+                           All '{selectedGroup}'
+                       </button>
+                       {subgroups.map(subgroupName => (
+                           <button
+                               key={subgroupName}
+                               className={`quick-access-button ${selectedSubgroup === subgroupName ? 'active' : ''}`}
+                               onClick={() => handleSubgroupSelect(subgroupName)}
+                           >
+                               {subgroupName}
+                           </button>
+                       ))}
+                   </>
+               )}
+           </div>
+       )}
+
+
+      {/* Gallery Grid */}
       <Gallery
         files={files}
         onImageClick={openViewer}
         lastImageRef={lastImageElementRef}
       />
+      {/* Loading spinner for pagination */}
       {isLoading && page > 1 && <div className="loading-spinner"></div>}
 
+      {/* Viewer Modal */}
       {initialIndex !== null && files.length > 0 && (
         <Viewer
           files={files}
@@ -209,7 +304,6 @@ const handleDelete = async (fileId) => {
           onClose={closeViewer}
           onLike={handleLike}
           onDelete={handleDelete}
-          // showFullSize prop removed
           zoomLevel={zoomLevel}
         />
       )}
