@@ -8,11 +8,9 @@ from app.db import get_db
 logger = logging.getLogger(__name__)
 bp = Blueprint("thumbnails", __name__)
 
-# Define directories for both thumbnails and previews
+# Define directories for thumbnails
 THUMB_DIR = "/app/data/thumbs"
-PREVIEW_DIR = "/app/data/previews"
 os.makedirs(THUMB_DIR, exist_ok=True)
-os.makedirs(PREVIEW_DIR, exist_ok=True)
 
 def create_image_version(src, dst, size, quality):
     """Creates a resized and compressed version of an image."""
@@ -52,7 +50,7 @@ def get_media_row(media_id):
         row = c.fetchone()
         if not row:
             logger.warning(f"Media ID not found: {media_id}")
-            abort(4.4)
+            abort(404)
         return row
     except Exception as e:
         logger.error(f"Database error fetching media ID {media_id}: {e}", exc_info=True)
@@ -72,30 +70,12 @@ def thumb(mid):
         if not os.path.exists(src):
             abort(404)
         if row["type"] == "image":
-            # size=(400, 400), quality=75 for thumbnails
-            create_image_version(src, dst, size=(400, 400), quality=75)
+            # size=(600, 600), quality=90 for thumbnails
+            create_image_version(src, dst, size=(600, 600), quality=90)
         else:
+            # For videos, we'll keep the 400x400 size as FFmpeg is slower
             create_video_thumb(src, dst)
     
     return send_file(dst, mimetype="image/jpeg")
 
-@bp.route("/api/preview/<int:mid>")
-def preview(mid):
-    """Serves a larger, lightly compressed preview image."""
-    row = get_media_row(mid)
-    src = row["path"]
-    dst = os.path.join(PREVIEW_DIR, f"{mid}.jpg")
-
-    if not os.path.exists(dst):
-        if not os.path.exists(src):
-            abort(44)
-        if row["type"] == "image":
-            # size=(1920, 1080), quality=90 for previews
-            create_image_version(src, dst, size=(1920, 1080), quality=90)
-        else: # For videos, serve the same thumbnail as the preview
-            thumb_path = os.path.join(THUMB_DIR, f"{mid}.jpg")
-            if not os.path.exists(thumb_path):
-                 create_video_thumb(src, thumb_path)
-            return send_file(thumb_path, mimetype="image/jpeg")
-
-    return send_file(dst, mimetype="image/jpeg")
+# The /api/preview endpoint has been removed.

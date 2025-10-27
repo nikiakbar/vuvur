@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MediaSlide from './MediaSlide';
 
-const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, showFullSize, zoomLevel }) => {
+const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) => { // Removed showFullSize
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const scrollContainerRef = useRef(null);
   const slideRefs = useRef([]);
@@ -45,7 +45,7 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, showFullSize, 
             file={file}
             index={index}
             currentIndex={currentIndex}
-            showFullSize={showFullSize}
+            // showFullSize prop removed
             onLike={() => onLike(file.id)}
             onDelete={() => onDelete(file.id)}
             showControls={true}

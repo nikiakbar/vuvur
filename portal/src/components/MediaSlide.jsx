@@ -29,7 +29,7 @@ const ExifTable = ({ data }) => {
 };
 
 
-const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete, showControls, zoomLevel }) => {
+const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls, zoomLevel }) => { // removed showFullSize
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
@@ -58,7 +58,8 @@ const MediaSlide = ({ file, index, currentIndex, showFullSize, onLike, onDelete,
     }
   }, [currentIndex, index]);
 
-  const imageUrl = showFullSize ? `/api/stream/${file.id}` : `/api/preview/${file.id}`;
+  // Always use the full-size stream endpoint
+  const imageUrl = `/api/stream/${file.id}`;
   const videoUrl = `/api/stream/${file.id}`;
 
   const handlePointerDown = (clientX, clientY) => {

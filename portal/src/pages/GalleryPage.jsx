@@ -4,7 +4,7 @@ import Viewer from '../components/Viewer';
 import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 
-function GalleryPage({ showFullSize, setShowFullSize }) {
+function GalleryPage() { // Removed showFullSize props
   const batchSize = 20;
   const zoomLevel = 2.5;
 
@@ -172,15 +172,7 @@ const handleDelete = async (fileId) => {
           <option value="file_asc">Filename (A-Z)</option>
           <option value="file_desc">Filename (Z-A)</option>
         </select>
-        <div className="setting-item">
-            <input
-              type="checkbox"
-              id="full-size-toggle"
-              checked={showFullSize}
-              onChange={(e) => setShowFullSize(e.target.checked)}
-            />
-            <label htmlFor="full-size-toggle">Show Full-Size in Viewer</label>
-        </div>
+        {/* Removed the "Show Full-Size" checkbox div */}
       </div>
 
       {groups.length > 0 && (
@@ -217,7 +209,7 @@ const handleDelete = async (fileId) => {
           onClose={closeViewer}
           onLike={handleLike}
           onDelete={handleDelete}
-          showFullSize={showFullSize}
+          // showFullSize prop removed
           zoomLevel={zoomLevel}
         />
       )}

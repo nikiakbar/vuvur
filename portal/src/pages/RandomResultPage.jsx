@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
-function RandomResultPage({ showFullSize, zoomLevel }) {
+function RandomResultPage({ zoomLevel }) { // Removed showFullSize
   const [media, setMedia] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
