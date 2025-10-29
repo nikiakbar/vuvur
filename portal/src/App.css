@@ -473,7 +473,7 @@ body.no-scroll {
 .close-button {
   position: fixed; top: 2vh; right: 1vw;
   z-index: 1001;
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.6);
   border-radius: 50%;
   width: 45px; height: 45px;
   display: flex; align-items: center; justify-content: center;

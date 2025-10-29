@@ -34,7 +34,8 @@ const ExifTable = ({ data }) => {
 };
 
 
-const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls, zoomLevel }) => {
+// ✅ Added onClose prop
+const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
@@ -44,8 +45,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
   const videoRef = useRef(null);
   const slideInfoRef = useRef(null);
   const DRAG_THRESHOLD = 10;
-  
-  // State to toggle EXIF visibility
+
   const [showExif, setShowExif] = useState(false);
 
   useEffect(() => {
@@ -57,15 +57,13 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
         videoRef.current.currentTime = 0;
       }
     }
-    // Reset EXIF view and zoom when scrolling to a new slide
     if (index !== currentIndex) {
       setShowExif(false);
-      setIsZoomed(false); // Reset zoom
-      setCurrentPan({ x: 0, y: 0 }); // Reset pan
+      setIsZoomed(false);
+      setCurrentPan({ x: 0, y: 0 });
     }
   }, [currentIndex, index]);
 
-  // Always use the full-size stream endpoint
   const imageUrl = `/api/stream/${file.id}`;
   const videoUrl = `/api/stream/${file.id}`;
 
@@ -103,7 +101,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
 
   const handleShowExif = (e) => {
     e.stopPropagation();
-    setShowExif(!showExif); // Toggle visibility
+    setShowExif(!showExif);
   };
 
   const handleLikeClick = (e) => {
@@ -116,39 +114,38 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
     onDelete();
   };
 
-  // Stop propagation on info bar click so it doesn't trigger zoom/pan
+  // ✅ Add handler for the new close button
+  const handleCloseClick = (e) => {
+      e.stopPropagation();
+      onClose(); // Call the passed-in onClose function
+  };
+
   const handleInfoBarClick = (e) => {
     e.stopPropagation();
   };
 
-  // Improved EXIF data retrieval
   const getExifData = () => {
-    // Check if file.exif exists and is a non-empty object or string
     if (file && file.exif && typeof file.exif === 'object' && Object.keys(file.exif).length > 0) {
-       return file.exif; // Already an object from gallery load
+       return file.exif;
     }
-    // If it's a non-empty string, try parsing (fallback)
     if (file && file.exif && typeof file.exif === 'string' && file.exif.trim() !== '' && file.exif.trim() !== '{}') {
       try {
         const parsed = JSON.parse(file.exif);
-        // Ensure it's not an empty object after parsing
         return Object.keys(parsed).length > 0 ? parsed : { error: 'No EXIF data found.' };
       } catch (e) {
         console.error("Could not parse EXIF string:", e);
         return { error: 'Could not parse EXIF data.' };
       }
     }
-    // Return error object if no valid EXIF found
     return { error: 'No EXIF data found.' };
   };
-  
-  // Memoize the EXIF data object
+
   const exifData = React.useMemo(() => getExifData(), [file]);
 
 
   return (
     <div className="viewer-slide">
-      <div 
+      <div
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
         onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
         onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY, e)}
@@ -160,48 +157,51 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, showControls,
         onTouchCancel={() => setIsDragging(false)}
       >
         {file.type === 'image' ? (
-          <img 
-            src={imageUrl} 
-            alt={file.path} 
-            style={{ 
+          <img
+            src={imageUrl}
+            alt={file.path}
+            style={{
               transform: `scale(${isZoomed ? zoomLevel : 1}) translate(${currentPan.x}px, ${currentPan.y}px)`,
               pointerEvents: 'none'
             }}
           />
         ) : (
-          <video 
+          <video
             ref={videoRef}
-            src={videoUrl} 
-            controls 
-            loop 
-            onClick={(e) => e.stopPropagation()} 
+            src={videoUrl}
+            controls
+            loop
+            onClick={(e) => e.stopPropagation()}
           />
         )}
       </div>
 
       {showControls && index === currentIndex && (
-        <div 
-          className={`slide-info ${showExif ? 'expanded' : ''}`} 
+        <div
+          className={`slide-info ${showExif ? 'expanded' : ''}`}
           ref={slideInfoRef}
-          onClick={handleInfoBarClick} // Prevent click propagation
+          onClick={handleInfoBarClick}
         >
           {showExif ? (
-             // Pass the memoized exifData
             <ExifTable data={exifData} />
           ) : (
-            // Filename removed from here
-            <div className="viewer-controls"> 
+            // Only show controls when EXIF is hidden
+            <div className="viewer-controls">
               {file.type === 'image' && <button title="Show EXIF" onClick={handleShowExif}>ℹ️</button>}
               <button title="Like" onClick={handleLikeClick}>❤️</button>
               <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+              {/* ✅ Add Close button here */}
+              <button title="Close Viewer" onClick={handleCloseClick}>&times;</button>
             </div>
           )}
-           {/* Controls moved inside the conditional rendering */}
+           {/* Show controls again when EXIF is expanded */}
            {showExif && (
              <div className="viewer-controls">
                 {file.type === 'image' && <button title="Hide EXIF" onClick={handleShowExif}>ℹ️</button>}
                 <button title="Like" onClick={handleLikeClick}>❤️</button>
                 <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+                {/* ✅ Add Close button here too */}
+                <button title="Close Viewer" onClick={handleCloseClick}>&times;</button>
              </div>
             )}
         </div>
