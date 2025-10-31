@@ -15,4 +15,5 @@ fi
 
 # Start the Gunicorn web server
 echo "--- Starting Gunicorn web server ---"
-exec gunicorn -w 2 -k gevent --max-requests 1000 -b 0.0.0.0:5000 "main:create_app()"
+# ✅ Use the WORKERS environment variable, with a default of 2
+exec gunicorn -w ${WORKERS:-3} -k gevent --max-requests 1000 -b 0.0.0.0:5000 "main:create_app()"
