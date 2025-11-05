@@ -3,6 +3,7 @@ import os
 from flask import Blueprint, request, Response, abort, send_file
 from app.db import get_db
 from app.auth_middleware import login_required
+from app.api_key_middleware import api_key_required
 
 stream_bp = Blueprint("stream", __name__)
 
@@ -19,6 +20,7 @@ def generate_range_response(path, start, end):
             start += len(data)
 
 @stream_bp.route("/api/stream/<int:media_id>")
+@api_key_required
 @login_required
 def stream(media_id):
     conn = get_db()

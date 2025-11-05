@@ -3,10 +3,11 @@ import os # Import os
 from flask import Blueprint, jsonify, request
 from app.db import get_db
 import json
+from app.api_key_middleware import api_key_required
 
 bp = Blueprint("gallery", __name__)
 GALLERY_PATH = "/mnt/gallery" # Ensure this matches scanner.py
-
+@api_key_required
 @bp.route("/api/gallery")
 def gallery():
     """

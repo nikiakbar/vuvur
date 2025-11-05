@@ -26,6 +26,7 @@ services:
       # A random, secret string used for signing user sessions.
       # It's critical to change this to a secure value if login is enabled.
       - SECRET_KEY=dev
+      - API_SECRET_KEY=your-very-secret-key-here
   portal:
     # build:
     #   context: ./frontend
@@ -49,3 +50,4 @@ services:
       # The number of random images to preload in the background on the random scroller page.
       # The default in the compose file is 3.
       - VITE_RANDOM_PRELOAD_COUNT=3
+      - API_SECRET_KEY=your-very-secret-key-here

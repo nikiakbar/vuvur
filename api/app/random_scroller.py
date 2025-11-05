@@ -1,8 +1,9 @@
 from flask import Blueprint, jsonify, request
 from app.db import get_db
+from app.api_key_middleware import api_key_required
 
 bp = Blueprint("random_scroller", __name__)
-
+@api_key_required
 @bp.route("/api/files/random")
 def random_files():
     """Get a list of random media files."""
