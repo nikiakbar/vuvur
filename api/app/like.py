@@ -1,10 +1,11 @@
 import os, shutil
 from flask import Blueprint, jsonify, abort
 from app.db import get_db
+from app.api_key_middleware import api_key_required
 
 bp = Blueprint("like", __name__)
 LIKED_DIR = "/mnt/gallery/liked"
-
+@api_key_required
 @bp.route("/api/toggle_like/<int:mid>", methods=["POST"])
 def toggle_like(mid):
     conn = get_db()

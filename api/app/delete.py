@@ -2,12 +2,13 @@ import os
 import shutil
 from flask import Blueprint, jsonify, abort
 from app.db import get_db
+from app.api_key_middleware import api_key_required
 
 bp = Blueprint("delete", __name__)
 
 # Define the path to the recycle bin
 RECYCLEBIN_PATH = "/mnt/gallery/recyclebin"
-
+@api_key_required
 @bp.route("/api/delete/<int:mid>", methods=["POST"])
 def delete_media_item(mid):
     """

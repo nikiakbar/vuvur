@@ -4,6 +4,7 @@ import logging
 from flask import Blueprint, send_file, abort
 from PIL import Image, ImageSequence # Import ImageSequence for GIF handling
 from app.db import get_db
+from app.api_key_middleware import api_key_required
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("thumbnails", __name__)
@@ -11,7 +12,7 @@ bp = Blueprint("thumbnails", __name__)
 # Define directories for thumbnails
 THUMB_DIR = "/app/data/thumbs"
 os.makedirs(THUMB_DIR, exist_ok=True)
-
+@api_key_required
 def create_image_version(src, dst, size, quality):
     """Creates a resized and compressed version of an image or GIF."""
     try:

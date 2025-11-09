@@ -2,10 +2,11 @@
 import os
 from flask import Blueprint, jsonify, request, abort
 from app.db import get_db
+from app.api_key_middleware import api_key_required
 
 bp = Blueprint("subgroups", __name__)
 GALLERY_PATH = "/mnt/gallery" # Ensure this matches scanner.py
-
+@api_key_required
 @bp.route("/api/gallery/subgroups")
 def get_subgroups():
     """
