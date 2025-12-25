@@ -1,53 +1,46 @@
 services:
-  api:
-    build:
-      context: ./api
-    # image: nikiakbar/vuvur:api
-    pull_policy: always
-    ports:
-      - "5005:5000"
-    volumes:
-      # core requirements
-      - vuvur_test:/app/data
-
-      - /mnt/z/Locals/system/outputs/txt2img-images/2025-08:/mnt/gallery/txt2img-images
-      # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
-      # - /mnt/z/Locals/system/liked:/mnt/gallery/liked
-      # - /mnt/z/Locals/system/recyclebin:/mnt/gallery/recyclebin
-      
-      # - /mnt/z/Locals/system/outputs/samples-images/:/mnt/gallery/images
-      - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
-      - /mnt/z/Locals/system/outputs/samples-vids:/mnt/gallery/videos
-      - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
-    restart: unless-stopped
-    environment:
-      # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.
-      - SCAN_INTERVAL=15
-      # - SCAN_INTERVAL=3600
-      - GALLERY_BATCH_SIZE=20
-      - RANDOM_PRELOAD_COUNT=3
-      - ENABLE_LOGIN=false
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:5000/healthz"]
-    #   interval: 5s
-    #   timeout: 5s
-    #   retries: 10
-
   portal:
     build:
       context: ./portal
     # image: nikiakbar/vuvur:portal
     pull_policy: always
     ports:
-      - "5004:80"
-    # depends_on:
-    #   api:
-    #     condition: service_healthy
-
-    restart: unless-stopped
+      - "3680:80"
     environment:
       - ZOOM_LEVEL=2.0
+      - API_SECRET_KEY=vuvur_dev
+      
+  api:
+    build:
+      context: ./api
+    # image: nikiakbar/vuvur:api
+    # pull_policy: always
+    ports:
+      - "3681:5000"
+    volumes:
+      # core requirements
+      # - vuvur_test:/app/data
 
-volumes:
-  vuvur_test:
-  #docker rm volume vuvur_vuvur_test
+      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/txt2img-images
+      # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
+      
+      # - /mnt/z/Locals/system/outputs/samples-images:/mnt/gallery/images
+      - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
+      - /mnt/z/Locals/system/outputs/samples-vids:/mnt/gallery/videos
+      - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
+    # restart: unless-stopped
+    environment:
+      # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.
+      - SCAN_INTERVAL=60
+      - GALLERY_BATCH_SIZE=20
+      - RANDOM_PRELOAD_COUNT=3
+      - ENABLE_LOGIN=false
+      - API_SECRET_KEY=vuvur_dev
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:5000/healthz"]
+    #   interval: 5s
+    #   timeout: 5s
+    #   retries: 10
+
+# volumes:
+#   vuvur_test:
