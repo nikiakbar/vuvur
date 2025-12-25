@@ -113,80 +113,105 @@ def update_scan_status(progress, total):
     with open(SCAN_STATUS_PATH, 'w') as f:
         json.dump({"progress": progress, "total": total}, f)
 
-def scan():
+def scan(limit=None):
     init_db()
     
     start_time = time.time()
-    logger.info("Starting library scan...")
+    logger.info(f"Starting library scan... (Limit: {limit})")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-
-    logger.info("Discovering all files on disk...")
-    all_disk_paths = []
-    # Added .gif to valid extensions
-    valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
-    for root, _, files in os.walk(GALLERY_PATH):
-        if RECYCLEBIN_PATH in root:
-            continue
-        for fname in files:
-            if os.path.splitext(fname)[1].lower() in valid_extensions:
-                all_disk_paths.append(os.path.join(root, fname))
-    
-    total_files = len(all_disk_paths)
-    update_scan_status(0, total_files)
-    logger.info(f"Found {total_files} total media files.")
 
     logger.info("Fetching existing media from database...")
     db_media = {row["path"]: dict(row) for row in c.execute("SELECT * FROM media")}
     db_paths = set(db_media.keys())
     logger.info(f"Database contains {len(db_paths)} records.")
-    
-    logger.info("Identifying files that need processing (in parallel)...")
+
+    logger.info("Discovering files on disk...")
     
     files_to_process = []
+    # all_disk_paths is used for deletion logic. 
+    # If limit is set, we will NOT perform deletion, so we don't strictly need to track everything found if we exit early.
+    all_disk_paths = [] 
     
-    # --- OPTIMIZATION: Parallelize the file status check ---
-    def check_file_status(path):
-        """Checks if a file is new or modified and returns it if so."""
-        try:
-            stat = os.stat(path)
-            # Check if it's a new file OR an existing file with a different size or modification time
-            if path not in db_paths or \
-               db_media[path]["size"] != stat.st_size or \
-               db_media[path]["mtime"] != stat.st_mtime:
-                return path
-        except FileNotFoundError:
-            return None
-        return None
+    valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
+    
+    limit_reached = False
+    
+    for root, _, files in os.walk(GALLERY_PATH):
+        if limit_reached:
+            break
+            
+        if RECYCLEBIN_PATH in root:
+            continue
+            
+        for fname in files:
+            if os.path.splitext(fname)[1].lower() in valid_extensions:
+                full_path = os.path.join(root, fname)
+                all_disk_paths.append(full_path)
+                
+                # Check if needs processing
+                needs_processing = False
+                try:
+                    stat = os.stat(full_path)
+                    if full_path not in db_paths:
+                        needs_processing = True
+                    elif db_media[full_path]["size"] != stat.st_size or \
+                         db_media[full_path]["mtime"] != stat.st_mtime:
+                        needs_processing = True
+                except FileNotFoundError:
+                    continue # File disappeared, skip
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        # This will run os.stat and the comparison for all files concurrently
-        results = executor.map(check_file_status, all_disk_paths)
-        # Filter out the None results for files that haven't changed
-        files_to_process = [path for path in results if path is not None]
+                if needs_processing:
+                    files_to_process.append(full_path)
+                    
+                    if limit is not None and len(files_to_process) >= limit:
+                        logger.info(f"Scan limit of {limit} reached during discovery. Stopping file walk.")
+                        limit_reached = True
+                        break
+
+    total_files_found = len(all_disk_paths)
+    if limit_reached:
+        logger.info(f"Discovery stopped early. Found {total_files_found} files (partial) and identified {len(files_to_process)} for processing.")
+    else:
+        logger.info(f"Discovery complete. Found {total_files_found} total media files.")
 
     logger.info(f"Found {len(files_to_process)} new or modified files to process for metadata.")
 
-    if not files_to_process:
-        logger.info("No new or modified files found. Scan complete.")
-        conn.close()
-        return
+    if not files_to_process and not (limit_reached is False and len(db_paths) != len(all_disk_paths)):
+        # If nothing to process AND (limit reached OR no diff in counts implying no deletions needed?)
+        # Actually safer to just check if we have nothing to process and limit was set.
+        # If limit was NOT set, we still might need to delete.
+        if limit is not None or not (db_paths - set(all_disk_paths)):
+             logger.info("No new/modified files and no deletions pending. Scan complete.")
+             conn.close()
+             return
 
     # --- Now process the identified files in parallel ---
     files_to_add = []
     files_to_update = []
+    
+    # ... (process_file_metadata function remains same, but locally defined) ...
+    # We need to redefine or pass dependencies if we moved this logic. 
+    # Refactoring slightly to keep it clean.
+    
+    def process_file_metadata_wrapper(path):
+        return process_file_metadata(path)
 
-    def process_file_metadata(path):
-        """Wrapper function to get all data for a single file."""
+    # Note: process_file_metadata calls get_metadata which is global. 
+    # But wait, the original code had process_file_metadata nested or global? 
+    # It was nested. I need to keep it nested or make it global. 
+    # I will keep the original implementation style if possible or define it here.
+    
+    def process_wrapper(path):
+        # Re-implementing the inner logic or calling a helper. 
+        # Since I am replacing the whole block, I will just paste the logic here.
         try:
             ext = os.path.splitext(path)[1].lower()
-            # Updated image types check to include GIF
             ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"} else "video"
             stat = os.stat(path)
             width, height, user_comment, exif = get_metadata(path, ftype)
             
-            # Automatically determine the group tag
             rel_path = os.path.relpath(path, GALLERY_PATH)
             group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
             
@@ -196,49 +221,50 @@ def scan():
                 "width": width, "height": height, "exif": exif, "group_tag": group_tag
             }
         except FileNotFoundError:
-            logger.warning(f"File not found during metadata scan, skipping: {path}")
-            return None # Return None if file was deleted mid-scan
+            return None
         except Exception as e:
             logger.error(f"Failed to process metadata for {path}: {e}")
             return None
 
-    processed_count = 0
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = executor.map(process_file_metadata, files_to_process)
-        for data in results:
-            processed_count += 1
-            if data is None: # Skip files that failed or were not found
-                continue
+    if files_to_process:
+        logger.info(f"Starting metadata extraction for {len(files_to_process)} files...")
+        processed_count = 0
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            results = executor.map(process_wrapper, files_to_process)
+            for data in results:
+                processed_count += 1
+                if data is None: continue
+                    
+                if data['path'] not in db_paths:
+                    files_to_add.append(tuple(data.values()))
+                else:
+                    update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
+                    files_to_update.append(update_data)
                 
-            if data['path'] not in db_paths:
-                files_to_add.append(tuple(data.values()))
-            else:
-                # Ensure the order matches the UPDATE statement
-                update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
-                files_to_update.append(update_data)
-            
-            if processed_count % 100 == 0:
-                logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
-                update_scan_status(processed_count, len(files_to_process))
-                
-    update_scan_status(len(files_to_process), len(files_to_process)) # Final update
-
-    logger.info("Metadata extraction complete. Preparing database updates.")
+                if processed_count % 50 == 0:
+                    logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
+                    update_scan_status(processed_count, len(files_to_process))
+                    
+        update_scan_status(len(files_to_process), len(files_to_process))
 
     if files_to_add:
-        logger.info(f"Adding {len(files_to_add)} new files to the database...")
+        logger.info(f"Adding {len(files_to_add)} new files...")
         c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
 
     if files_to_update:
-        logger.info(f"Updating {len(files_to_update)} existing files in the database...")
+        logger.info(f"Updating {len(files_to_update)} existing files...")
         c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
 
-    paths_to_delete = db_paths - set(all_disk_paths)
-    if paths_to_delete:
-        logger.info(f"Removing {len(paths_to_delete)} deleted files from the database...")
-        c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
+    # Deletion Logic
+    if limit is not None:
+        logger.info("Scan limit active. Skipping deletion phase to prevent data loss on partial scan.")
+    else:
+        paths_to_delete = db_paths - set(all_disk_paths)
+        if paths_to_delete:
+            logger.info(f"Removing {len(paths_to_delete)} deleted files...")
+            c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
 
-    logger.info("Committing changes to the database...")
+    logger.info("Committing changes...")
     conn.commit()
     conn.close()
     end_time = time.time()

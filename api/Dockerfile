@@ -15,6 +15,9 @@ ENV PYTHONUNBUFFERED 1
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Cache buster to ensure changes to run.sh and other files are picked up
+ARG CACHEBUSTER=1
+
 COPY . .
 
 # Make the new startup script executable

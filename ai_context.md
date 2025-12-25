@@ -10,6 +10,15 @@ This document serves as the primary context for AI assistants working on the Vuv
 4.  **Existing Media Focus**: The app must efficiently read and display media from specified local directories.
 5.  **Instant Scanning**: The app should "scan on the go." Users should be able to start browsing media as soon as the app starts, without waiting for a full initial scan to complete. Scanning and streaming should be as fast as possible.
 6.  **Modern Stack**: Use the latest stable versions of libraries and frameworks to ensure performance and maintainability.
+7.  **Periodic Scanning**: The app should perform periodic scans to detect new media files and update the database accordingly.
+8.  **Metadata Extraction**: The app should extract metadata from media files and store it in the database.
+9.  **Thumbnails**: The app should generate thumbnails for media files and store them in the database.
+10. **Streaming**: The app should stream media files to the client for playback.
+11. **Search**: The app should provide a search interface to search for media files by name, date, or other metadata.
+12. **Sorting**: The app should provide a sorting interface to sort media files by name, date, or other metadata.
+13. **Pagination**: The app should provide a pagination interface to paginate media files.
+14. 
+15. 
 
 ## 🛠 Tech Stack
 

@@ -68,6 +68,8 @@ def init_db():
     """)
 
     c.execute("CREATE INDEX IF NOT EXISTS idx_media_group_tag ON media (group_tag);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_media_path ON media (path);")
+    
     
     conn.commit()
     conn.close()
