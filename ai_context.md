@@ -25,12 +25,15 @@ This document serves as the primary context for AI assistants working on the Vuv
 ### Backend (API)
 - **Language**: Python
 - **Framework**: Flask
-- **Database**: SQLite (using FTS5 for search)
+- **Database**: SQLite (using FTS5 for search, WAL mode for concurrency)
 - **Processing**:
     - **Pillow**: Image processing and metadata extraction.
     - **piexif**: Robust EXIF metadata extraction for JPEG/WebP.
     - **ffmpeg/ffprobe**: Video metadata and thumbnail generation.
-- **Concurrency**: Background scanning implemented with Python `threading` and `concurrent.futures.ThreadPoolExecutor` for parallel processing of file stats and metadata.
+- **Architecture**: 
+    - **API Workers**: Handle HTTP requests (read-only for media table during scans)
+    - **Scanner Service**: Separate service for background scanning (runs independently)
+    - **Concurrency**: Parallel processing with `concurrent.futures.ThreadPoolExecutor`
 
 ### Frontend (Portal)
 - **Framework**: React (Vite-based)
@@ -45,15 +48,31 @@ This document serves as the primary context for AI assistants working on the Vuv
 
 - `/api`: Python Flask backend.
     - `/app`: Core logic (scanning, database, API blueprints).
+    - `scanner_service.py`: Standalone scanner service (runs in separate container).
 - `/portal`: React frontend.
     - `/src`: Frontend components and logic.
-- `/docker-compose.yaml`: Deployment configuration.
+- `/compose.yaml`: Deployment configuration (3 services: portal, api, scanner).
 
 ## 📝 Key Implementation Details
 
-- **Scanning Logic**: Found in `api/app/scanner.py`. It uses `os.walk` for discovery and parallelizes metadata extraction.
+### Scanning Architecture
+- **Separate Service**: Scanner runs in dedicated container to avoid worker timeouts and database lock contention.
+- **Initial Scan**: Limited to `INITIAL_SCAN_MAX_MEDIA` files (default 5000) for fast startup.
+- **Periodic Scans**: Process remaining files without limits at `SCAN_INTERVAL` (default 60s).
+- **Early Exit**: Scanner stops filesystem traversal once limit is reached (optimized for 100k+ files).
+- **Deletion Safety**: Deletion phase is skipped during limited scans to prevent data loss.
+
+### Like Functionality
+- **Behavior**: Clicking like moves file to `/mnt/gallery/liked` directory.
+- **State Tracking**: `original_path` column stores where file came from for unlinking.
+- **UI States**: 
+  - Liked: Fully red heart icon
+  - Not liked: Transparent outline heart icon
+
+### Other Features
 - **Streaming**: Supports byte-range requests for efficient video playback.
 - **Thumbnails**: Dynamically generated and cached.
+- **Search**: Full-text search using SQLite FTS5.
 
 ## ⚠️ Development Constraints
 
@@ -61,3 +80,4 @@ This document serves as the primary context for AI assistants working on the Vuv
 - **DO** ensure any layout changes maintain masonry behavior.
 - **DO** prioritize performance, especially for the initial scan experience.
 - **DO** use modern CSS and avoid heavy third-party UI libraries unless necessary.
+- **DO** maintain separation between API workers (read) and scanner service (write during scans).

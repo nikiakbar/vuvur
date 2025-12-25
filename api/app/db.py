@@ -39,7 +39,8 @@ def init_db():
         width INTEGER,
         height INTEGER,
         exif TEXT,
-        group_tag TEXT
+        group_tag TEXT,
+        original_path TEXT
     )
     """)
 

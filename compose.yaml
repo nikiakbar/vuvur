@@ -19,7 +19,7 @@ services:
       - "3681:5000"
     volumes:
       # Core requirements - shared data volume for database
-      - vuvur_data:/app/data
+      - vuvur_local_dev:/app/data
 
       - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/txt2img-images
       # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
@@ -48,7 +48,7 @@ services:
       - /mnt/z/Locals/system/outputs/samples-vids:/mnt/gallery/videos
       - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
       # Share data directory for database and locks
-      - vuvur_data:/app/data
+      - vuvur_local_dev:/app/data
     # restart: unless-stopped
     environment:
       - INITIAL_SCAN_MAX_MEDIA=10000
@@ -57,4 +57,4 @@ services:
       - api
 
 volumes:
-  vuvur_data:
+  vuvur_local_dev:
