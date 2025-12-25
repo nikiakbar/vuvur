@@ -39,8 +39,7 @@ The backend automatically scans designated directories, extracts metadata (inclu
 - [x] Native video playback
 - [x] Random media scroller
 - [x] Settings screen to switch API endpoints and clear cache
-- [ ] Offline caching or viewing capabilities
-- [ ] EXIF data display in the viewer
+- [x] EXIF data display in the viewer
 - [ ] "Liking" and deleting functionality from the viewer
 
 ---
