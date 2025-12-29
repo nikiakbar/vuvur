@@ -39,7 +39,8 @@ def init_db():
         width INTEGER,
         height INTEGER,
         exif TEXT,
-        group_tag TEXT
+        group_tag TEXT,
+        original_path TEXT
     )
     """)
 
@@ -68,6 +69,8 @@ def init_db():
     """)
 
     c.execute("CREATE INDEX IF NOT EXISTS idx_media_group_tag ON media (group_tag);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_media_path ON media (path);")
+    
     
     conn.commit()
     conn.close()

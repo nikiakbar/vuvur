@@ -10,4 +10,5 @@ set -e
 # Start the Gunicorn web server
 echo "--- Starting Gunicorn web server ---"
 # Use the WORKERS environment variable, with a default of 2
-exec gunicorn -w ${WORKERS:-2} -k gevent --max-requests 1000 -b 0.0.0.0:5000 "main:create_app()"
+# Set timeout to 300s to allow long-running background scans without killing workers
+exec gunicorn -w ${WORKERS:-2} -k gevent --max-requests 1000 --timeout 300 -b 0.0.0.0:5000 "main:create_app()"

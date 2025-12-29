@@ -1,0 +1,10 @@
+--- Starting Gunicorn web server ---
+[2025-12-29 08:12:00 +0000] [38748] [INFO] Starting gunicorn 23.0.0
+[2025-12-29 08:12:00 +0000] [38748] [INFO] Listening at: http://0.0.0.0:5000 (38748)
+[2025-12-29 08:12:00 +0000] [38748] [INFO] Using worker: gevent
+[2025-12-29 08:12:00 +0000] [38895] [INFO] Booting worker with pid: 38895
+[2025-12-29 08:12:00 +0000] [38896] [INFO] Booting worker with pid: 38896
+2025-12-29 08:12:00,959 - root - INFO - Database initialized successfully
+2025-12-29 08:12:00,970 - root - INFO - API workers ready (scanner runs in separate service)
+2025-12-29 08:12:00,990 - root - INFO - Database initialized successfully
+2025-12-29 08:12:01,003 - root - INFO - API workers ready (scanner runs in separate service)

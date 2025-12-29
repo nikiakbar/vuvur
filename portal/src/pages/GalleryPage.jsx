@@ -76,7 +76,7 @@ function GalleryPage() {
     fetchGroups();
   }, [scanStatus.scan_complete]);
 
-   // Effect to fetch subgroups when a top-level group is selected
+  // Effect to fetch subgroups when a top-level group is selected
   useEffect(() => {
     if (!selectedGroup) {
       setSubgroups([]); // Clear subgroups if no group is selected
@@ -85,7 +85,7 @@ function GalleryPage() {
     }
 
     const fetchSubgroups = async () => {
-       setIsLoadingSubgroups(true);
+      setIsLoadingSubgroups(true);
       try {
         const params = new URLSearchParams({ group: selectedGroup });
         const response = await fetch(`/api/gallery/subgroups?${params.toString()}`);
@@ -96,7 +96,7 @@ function GalleryPage() {
         console.error(`Failed to fetch subgroups for ${selectedGroup}:`, error);
         setSubgroups([]); // Clear on error
       } finally {
-          setIsLoadingSubgroups(false);
+        setIsLoadingSubgroups(false);
       }
     };
     fetchSubgroups();
@@ -119,27 +119,27 @@ function GalleryPage() {
 
     fetch(`/api/gallery?${params.toString()}`)
       .then(res => {
-         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-         return res.json();
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
       })
       .then(data => {
         if (data && data.items && Array.isArray(data.items)) {
           setFiles(prev => (page === 1 ? data.items : [...prev, ...data.items]));
           setHasMore(page < data.total_pages);
         } else {
-             // Handle case where API might return unexpected structure
-             console.warn("Received unexpected data structure from /api/gallery:", data);
-             setFiles(prev => (page === 1 ? [] : prev)); // Clear on page 1 if data bad
-             setHasMore(false);
+          // Handle case where API might return unexpected structure
+          console.warn("Received unexpected data structure from /api/gallery:", data);
+          setFiles(prev => (page === 1 ? [] : prev)); // Clear on page 1 if data bad
+          setHasMore(false);
         }
         setIsLoading(false);
       })
       .catch((error) => {
-         console.error("Failed to fetch gallery:", error);
+        console.error("Failed to fetch gallery:", error);
         setIsLoading(false);
-         // Optionally show an error message to the user here
+        // Optionally show an error message to the user here
       });
-      // Add selectedSubgroup dependency
+    // Add selectedSubgroup dependency
   }, [scanStatus.scan_complete, page, sortBy, debouncedQuery, batchSize, selectedGroup, selectedSubgroup]);
 
   // Effect to reset gallery/pagination when filters change
@@ -148,16 +148,16 @@ function GalleryPage() {
     setFiles([]);
     // Only reset subgroup if the main group changes
     if (selectedSubgroup && !selectedGroup) {
-         setSelectedSubgroup('');
+      setSelectedSubgroup('');
     }
-     // Add selectedSubgroup dependency
+    // Add selectedSubgroup dependency
   }, [sortBy, debouncedQuery, selectedGroup, selectedSubgroup]);
 
   // Infinite scroll observer (no changes needed here)
   const observer = useRef();
   const lastImageElementRef = useCallback(node => {
-     // ... (observer logic remains the same) ...
-     if (isLoading) return;
+    // ... (observer logic remains the same) ...
+    if (isLoading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore) {
@@ -170,31 +170,66 @@ function GalleryPage() {
 
   // --- Action Handlers ---
   const handleLike = async (fileId) => {
-     // ... (like logic remains the same) ...
-     try {
+    try {
+      // Optimistically update the UI
+      setFiles(prevFiles =>
+        prevFiles.map(f =>
+          f.id === fileId ? { ...f, liked: f.liked ? 0 : 1 } : f
+        )
+      );
+
       await fetch(`/api/toggle_like/${fileId}`, { method: 'POST' });
-      setFiles(files.filter(f => f.id !== fileId));
-      if (files.length === 1) setInitialIndex(null); // Close viewer if last image removed
-      // Adjust index if needed after deletion (more complex, skip for now)
     } catch (error) {
       console.error("Failed to like file:", error);
+      // Revert the optimistic update on error
+      setFiles(prevFiles =>
+        prevFiles.map(f =>
+          f.id === fileId ? { ...f, liked: f.liked ? 0 : 1 } : f
+        )
+      );
     }
   };
 
   const handleDelete = async (fileId) => {
-     // ... (delete logic remains the same) ...
-      try {
+    // Confirmation dialog to prevent accidental deletions
+    if (!window.confirm('Move this file to recycle bin?')) {
+      return;
+    }
+
+    try {
+      // Find the current file index for viewer navigation adjustment
+      const deletedIndex = files.findIndex(f => f.id === fileId);
+
+      // Optimistically remove from UI
+      setFiles(prevFiles => prevFiles.filter(f => f.id !== fileId));
+
+      // Adjust viewer index if viewer is open
+      if (initialIndex !== null) {
+        if (files.length === 1) {
+          // Last image - close viewer
+          setInitialIndex(null);
+        } else if (deletedIndex === initialIndex) {
+          // Deleted current image - stay at same index (shows next image)
+          // No change needed as the next image will now be at this index
+        } else if (deletedIndex < initialIndex) {
+          // Deleted image before current - adjust index down
+          setInitialIndex(initialIndex - 1);
+        }
+        // If deletedIndex > initialIndex, no adjustment needed
+      }
+
       const response = await fetch(`/api/delete/${fileId}`, { method: 'POST' });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to delete file.');
       }
-      setFiles(files.filter(f => f.id !== fileId));
-      if (files.length === 1) setInitialIndex(null); // Close viewer if last image removed
-       // Adjust index if needed after deletion (more complex, skip for now)
     } catch (error) {
       console.error("Failed to delete file:", error);
       alert(`Error: ${error.message}`);
+
+      // Revert optimistic update on error - need to refetch
+      // For simplicity, we'll just reload the page or refetch data
+      window.location.reload();
     }
   };
 
@@ -202,14 +237,14 @@ function GalleryPage() {
   const closeViewer = () => setInitialIndex(null);
 
   // --- Filter Selection Handlers ---
-   const handleGroupSelect = (groupTag) => {
-       setSelectedGroup(groupTag);
-       setSelectedSubgroup(''); // Reset subgroup when main group changes
-   };
+  const handleGroupSelect = (groupTag) => {
+    setSelectedGroup(groupTag);
+    setSelectedSubgroup(''); // Reset subgroup when main group changes
+  };
 
-   const handleSubgroupSelect = (subgroupTag) => {
-        setSelectedSubgroup(subgroupTag);
-   };
+  const handleSubgroupSelect = (subgroupTag) => {
+    setSelectedSubgroup(subgroupTag);
+  };
 
 
   // --- Render Logic ---
@@ -221,8 +256,8 @@ function GalleryPage() {
     <>
       {/* Search and Sort Bar (remains the same) */}
       <div className="controls-bar settings">
-         {/* ... (input and select elements remain the same) ... */}
-         <input
+        {/* ... (input and select elements remain the same) ... */}
+        <input
           type="text"
           placeholder="Search filename or EXIF..."
           className="filter-input"
@@ -259,32 +294,32 @@ function GalleryPage() {
         </div>
       )}
 
-       {/* Subgroup Buttons (only show if a group is selected and subgroups exist or are loading) */}
-       {(selectedGroup && (subgroups.length > 0 || isLoadingSubgroups)) && (
-           <div className="quick-access-bar subgroup-bar">
-               {isLoadingSubgroups ? (
-                   <span className="loading-subgroups">Loading subfolders...</span>
-               ) : (
-                   <>
-                       <button
-                           className={`quick-access-button ${selectedSubgroup === '' ? 'active' : ''}`}
-                           onClick={() => handleSubgroupSelect('')}
-                       >
-                           All '{selectedGroup}'
-                       </button>
-                       {subgroups.map(subgroupName => (
-                           <button
-                               key={subgroupName}
-                               className={`quick-access-button ${selectedSubgroup === subgroupName ? 'active' : ''}`}
-                               onClick={() => handleSubgroupSelect(subgroupName)}
-                           >
-                               {subgroupName}
-                           </button>
-                       ))}
-                   </>
-               )}
-           </div>
-       )}
+      {/* Subgroup Buttons (only show if a group is selected and subgroups exist or are loading) */}
+      {(selectedGroup && (subgroups.length > 0 || isLoadingSubgroups)) && (
+        <div className="quick-access-bar subgroup-bar">
+          {isLoadingSubgroups ? (
+            <span className="loading-subgroups">Loading subfolders...</span>
+          ) : (
+            <>
+              <button
+                className={`quick-access-button ${selectedSubgroup === '' ? 'active' : ''}`}
+                onClick={() => handleSubgroupSelect('')}
+              >
+                All '{selectedGroup}'
+              </button>
+              {subgroups.map(subgroupName => (
+                <button
+                  key={subgroupName}
+                  className={`quick-access-button ${selectedSubgroup === subgroupName ? 'active' : ''}`}
+                  onClick={() => handleSubgroupSelect(subgroupName)}
+                >
+                  {subgroupName}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
 
       {/* Gallery Grid */}

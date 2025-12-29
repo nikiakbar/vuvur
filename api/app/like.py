@@ -16,21 +16,31 @@ def toggle_like(mid):
         conn.close()
         abort(404)
 
-    path, liked, orig = row["path"], row["liked"], row["original_path"]
+    path = row["path"]
+    liked = row["liked"]
+    orig = row["original_path"] if row["original_path"] else None  # May be None for old records
 
     if liked:
-        # unlike -> move back
-        target = orig
+        # Unlike -> move back to original location
+        if orig and os.path.exists(os.path.dirname(orig)):
+            target = orig
+        else:
+            # Fallback: if original_path is missing, keep in liked folder
+            # This shouldn't happen but prevents errors
+            conn.close()
+            return jsonify({"status": "error", "message": "Cannot unlike: original path unknown"}), 400
+        
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.move(path, target)
-        c.execute("UPDATE media SET path=?, liked=0 WHERE id=?", (target, mid))
+        c.execute("UPDATE media SET path=?, liked=0, original_path=NULL WHERE id=?", (target, mid))
     else:
-        # like -> move into liked
+        # Like -> move to liked folder and store original path
         target = os.path.join(LIKED_DIR, os.path.basename(path))
         os.makedirs(LIKED_DIR, exist_ok=True)
         shutil.move(path, target)
-        c.execute("UPDATE media SET path=?, liked=1 WHERE id=?", (target, mid))
+        c.execute("UPDATE media SET path=?, liked=1, original_path=? WHERE id=?", (target, path, mid))
 
     conn.commit()
     conn.close()
     return jsonify({"status": "ok", "liked": not liked})
+

@@ -2,68 +2,10 @@ from flask import Flask
 import os
 from flasgger import Swagger
 import logging
-import threading
-import time
 from filelock import FileLock, Timeout
 
-from app.scanner import scan
 from app import auth, db, gallery, groups, subgroups, like, scan_api, search, stream, random_scroller, thumbnails, health
 from app import delete
-
-# Define paths globally for clarity
-LOCK_PATH = "/app/data/scanner.lock"
-INITIAL_SCAN_FLAG_PATH = "/app/data/.initial_scan_complete" # ✅ Define flag path here
-
-def run_scanner_manager():
-    """
-    Manages the scanning process.
-    Performs an initial scan in the background on first launch,
-    then starts the periodic scanning loop.
-    """
-    interval = int(os.environ.get("SCAN_INTERVAL", 3600))
-    lock = FileLock(LOCK_PATH, timeout=10) # 10s timeout for lock
-
-    # Give the server a few seconds to start up before the initial scan
-    time.sleep(5) 
-    logging.info("Scanner manager thread started.")
-
-    # --- INITIAL SCAN (non-blocking) ---
-    # Check if the initial scan has *ever* been completed
-    if not os.path.exists(INITIAL_SCAN_FLAG_PATH):
-        logging.info("Initial scan flag not found. Running one-time background scan.")
-        try:
-            with lock:
-                logging.info("Acquired lock for initial scan.")
-                scan() # This is the long-running scan
-                # Create the flag file *after* scan completes successfully
-                with open(INITIAL_SCAN_FLAG_PATH, 'w') as f:
-                    f.write('done')
-                logging.info("Initial background scan finished and flag file created.")
-        except Timeout:
-            logging.warning("Could not acquire lock for initial scan; another process may be running it.")
-        except Exception as e:
-            logging.error(f"Error during initial background scan: {e}", exc_info=True)
-    else:
-        logging.info("Initial scan flag found. Skipping initial scan.")
-
-
-    # --- PERIODIC SCANNING ---
-    if interval == 0:
-        logging.info("SCAN_INTERVAL is 0. Periodic scanning is disabled.")
-        return
-    
-    logging.info(f"Periodic scanner will run every {interval} seconds.")
-    while True:
-        time.sleep(interval)
-        try:
-            with lock:
-                logging.info("Starting periodic background scan...")
-                scan()
-                logging.info("Periodic background scan finished.")
-        except Timeout:
-            logging.warning("Could not acquire lock for periodic scan; it may be running in another process.")
-        except Exception as e:
-             logging.error(f"Error during periodic background scan: {e}", exc_info=True)
 
 def create_app():
     """Create and configure an instance of the Flask application."""
@@ -86,9 +28,20 @@ def create_app():
     except OSError as e:
         logging.error(f"Error creating directories: {e}")
 
-    # Initialize the database
-    with app.app_context():
-        db.init_db()
+    # Initialize the database with a lock to prevent contention
+    # Multiple workers may try to set WAL mode simultaneously
+    DB_INIT_LOCK_PATH = "/app/data/db_init.lock"
+    db_init_lock = FileLock(DB_INIT_LOCK_PATH, timeout=10)
+    
+    try:
+        with db_init_lock:
+            with app.app_context():
+                db.init_db()
+                logging.info("Database initialized successfully")
+    except Timeout:
+        logging.info("Another worker is initializing database, skipping...")
+    except Exception as e:
+        logging.error(f"Error initializing database: {e}", exc_info=True)
 
     # Register blueprints
     app.register_blueprint(auth.auth_bp)
@@ -105,9 +58,6 @@ def create_app():
     app.register_blueprint(health.bp)
     app.register_blueprint(delete.bp)
     
-    # Start the scanner manager in a background thread
-    # This thread will now handle the initial scan *after* Gunicorn starts
-    scan_thread = threading.Thread(target=run_scanner_manager, daemon=True)
-    scan_thread.start()
+    logging.info("API workers ready (scanner runs in separate service)")
 
     return app

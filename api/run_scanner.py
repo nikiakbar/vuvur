@@ -20,7 +20,14 @@ if __name__ == '__main__':
     logging.info("Initializing database from script...")
     init_db()
     logging.info("Starting library scan from script...")
-    scan()
+    
+    # Read max media limit from environment variable (default 5000)
+    try:
+        max_media = int(os.environ.get("INITIAL_SCAN_MAX_MEDIA", 5000))
+    except ValueError:
+        max_media = 5000 # Fallback default
+        
+    scan(limit=max_media)
     # Create the flag file to signal that the initial scan is done
     with open(INITIAL_SCAN_FLAG_PATH, 'w') as f:
         f.write('done')
