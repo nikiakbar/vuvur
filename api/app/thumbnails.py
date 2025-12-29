@@ -12,7 +12,6 @@ bp = Blueprint("thumbnails", __name__)
 # Define directories for thumbnails
 THUMB_DIR = "/app/data/thumbs"
 os.makedirs(THUMB_DIR, exist_ok=True)
-@api_key_required
 def create_image_version(src, dst, size, quality):
     """Creates a resized and compressed version of an image or GIF."""
     try:
@@ -83,6 +82,7 @@ def get_media_row(media_id):
             conn.close()
 
 @bp.route("/api/thumbnails/<int:mid>")
+@api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
     row = get_media_row(mid)
