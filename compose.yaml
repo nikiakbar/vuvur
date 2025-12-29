@@ -9,6 +9,9 @@ services:
     environment:
       - ZOOM_LEVEL=2.0
       - API_SECRET_KEY=vuvur_dev
+      - VITE_GALLERY_BATCH_SIZE=20
+      - VITE_RANDOM_PRELOAD_COUNT=3
+      - VITE_ZOOM_LEVEL=2.5
       
   api:
     build:
@@ -35,8 +38,6 @@ services:
     environment:
       # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.
       - WORKERS=2
-      - GALLERY_BATCH_SIZE=20
-      - RANDOM_PRELOAD_COUNT=3
       - ENABLE_LOGIN=false
       - API_SECRET_KEY=vuvur_dev
 

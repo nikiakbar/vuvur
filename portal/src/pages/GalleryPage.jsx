@@ -6,8 +6,8 @@ import useDebounce from '../useDebounce';
 import ScanningDisplay from '../components/ScanningDisplay';
 
 function GalleryPage() {
-  const batchSize = 20; // Consider making this configurable via env var if needed
-  const zoomLevel = 2.5; // Consider making this configurable via env var if needed
+  const batchSize = parseInt(window.env?.GALLERY_BATCH_SIZE) || 20;
+  const zoomLevel = parseFloat(window.env?.ZOOM_LEVEL) || 2.5;
 
   // State for gallery data
   const [files, setFiles] = useState([]);

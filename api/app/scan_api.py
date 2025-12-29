@@ -30,7 +30,8 @@ def scan_status():
 def trigger_scan():
     """Triggers a library scan."""
     try:
-        scan()
+        max_media = int(os.environ.get("INITIAL_SCAN_MAX_MEDIA", 5000))
+        scan(limit=max_media)
         return jsonify({"status": "ok", "message": "Scan completed"}), 200
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -48,7 +49,8 @@ def cleanup_cache():
         if os.path.exists(db_path):
             os.remove(db_path)
 
-        scan()
+        max_media = int(os.environ.get("INITIAL_SCAN_MAX_MEDIA", 5000))
+        scan(limit=max_media)
         
         # ✅ FIX: Re-create the flag file to signal that the scan is done
         with open(INITIAL_SCAN_FLAG_PATH, 'w') as f:

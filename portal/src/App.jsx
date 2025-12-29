@@ -22,6 +22,10 @@ function App() {
     setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
   };
 
+  // Read config from window.env (populated by entrypoint.sh in Docker)
+  const preloadCount = parseInt(window.env?.RANDOM_PRELOAD_COUNT) || 3;
+  const zoomLevel = parseFloat(window.env?.ZOOM_LEVEL) || 2.5;
+
   const location = useLocation();
   const isFullscreen = location.pathname === '/random-scroller' || location.pathname === '/random-result';
 
@@ -38,7 +42,7 @@ function App() {
             />
             <Route
               path="/random-scroller"
-              element={<RandomPage />}
+              element={<RandomPage preloadCount={preloadCount} zoomLevel={zoomLevel} />}
             />
             <Route
               path="/search"
@@ -46,7 +50,7 @@ function App() {
             />
             <Route
               path="/random-result"
-              element={<RandomResultPage />}
+              element={<RandomResultPage zoomLevel={zoomLevel} />}
             />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
