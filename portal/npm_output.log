@@ -1,0 +1,27 @@
+
+> vuvur-frontend@0.0.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 459 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+8:09:46 AM [vite] http proxy error: /api/files/random?count=NaN
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+8:09:46 AM [vite] http proxy error: /api/files/random?count=NaN
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+8:10:06 AM [vite] http proxy error: /api/files/random?count=NaN
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+8:10:06 AM [vite] http proxy error: /api/files/random?count=NaN
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+8:11:24 AM [vite] http proxy error: /api/files/random?count=NaN
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+8:11:24 AM [vite] http proxy error: /api/files/random?count=NaN
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)

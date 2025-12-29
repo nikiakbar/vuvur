@@ -5,6 +5,8 @@ import MediaSlide from '../components/MediaSlide';
 function RandomPage({ preloadCount, zoomLevel }) { // Removed showFullSize
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const slideRefs = useRef([]);
   const observer = useRef();
 
   const loadNextImages = useCallback(async (count) => {
@@ -44,6 +46,40 @@ function RandomPage({ preloadCount, zoomLevel }) { // Removed showFullSize
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setCurrentIndex(prevIndex => {
+          const nextIndex = Math.min(prevIndex + 1, files.length - 1);
+          if (slideRefs.current[nextIndex]) {
+            slideRefs.current[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          // Preload when approaching the end
+          if (files.length - nextIndex < preloadCount + 1) {
+            loadNextImages(preloadCount);
+          }
+          return nextIndex;
+        });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCurrentIndex(prevIndex => {
+          const nextIndex = Math.max(prevIndex - 1, 0);
+          if (slideRefs.current[nextIndex]) {
+            slideRefs.current[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          return nextIndex;
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [files.length, preloadCount, loadNextImages]);
+
+
   if (files.length === 0 && isLoading) {
     return <div className="loading-fullscreen">Loading...</div>;
   }
@@ -58,12 +94,17 @@ function RandomPage({ preloadCount, zoomLevel }) { // Removed showFullSize
       {files.map((file, index) => {
         const isLastElement = index === files.length - 1;
         return (
-          <div 
-            ref={isLastElement ? lastImageElementRef : null} 
-            key={`${file.path}-${index}`} 
+          <div
+            ref={el => {
+              slideRefs.current[index] = el;
+              if (isLastElement) {
+                lastImageElementRef(el);
+              }
+            }}
+            key={`${file.path}-${index}`}
             className="viewer-slide"
           >
-            <MediaSlide 
+            <MediaSlide
               file={file} 
               showControls={false} 
               // showFullSize prop removed
