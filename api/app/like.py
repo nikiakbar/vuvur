@@ -18,7 +18,7 @@ def toggle_like(mid):
 
     path = row["path"]
     liked = row["liked"]
-    orig = row.get("original_path")  # May be None for old records
+    orig = row["original_path"] if row["original_path"] else None  # May be None for old records
 
     if liked:
         # Unlike -> move back to original location

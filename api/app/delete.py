@@ -1,5 +1,6 @@
 import os
 import shutil
+import time
 from flask import Blueprint, jsonify, abort
 from app.db import get_db
 from app.api_key_middleware import api_key_required
@@ -27,8 +28,13 @@ def delete_media_item(mid):
     # Ensure the recycle bin directory exists
     os.makedirs(RECYCLEBIN_PATH, exist_ok=True)
     
-    # Define the destination path in the recycle bin
-    destination_path = os.path.join(RECYCLEBIN_PATH, os.path.basename(file_path))
+    # Generate unique filename with timestamp to prevent collisions
+    timestamp = int(time.time() * 1000)
+    filename = os.path.basename(file_path)
+    name, ext = os.path.splitext(filename)
+    unique_filename = f"{name}_{timestamp}{ext}"
+    destination_path = os.path.join(RECYCLEBIN_PATH, unique_filename)
+
 
     try:
         # Move the file

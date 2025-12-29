@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import HeartIcon from './HeartIcon';
 
 // A simple component to render the EXIF data table, now used internally
 const ExifTable = ({ data }) => {
@@ -51,7 +52,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
   useEffect(() => {
     if (videoRef.current) {
       if (index === currentIndex) {
-        videoRef.current.play().catch(error => {});
+        videoRef.current.play().catch(error => { });
       } else {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;
@@ -116,8 +117,8 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
 
   // ✅ Add handler for the new close button
   const handleCloseClick = (e) => {
-      e.stopPropagation();
-      onClose(); // Call the passed-in onClose function
+    e.stopPropagation();
+    onClose(); // Call the passed-in onClose function
   };
 
   const handleInfoBarClick = (e) => {
@@ -126,7 +127,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
 
   const getExifData = () => {
     if (file && file.exif && typeof file.exif === 'object' && Object.keys(file.exif).length > 0) {
-       return file.exif;
+      return file.exif;
     }
     if (file && file.exif && typeof file.exif === 'string' && file.exif.trim() !== '' && file.exif.trim() !== '{}') {
       try {
@@ -188,22 +189,26 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
             // Only show controls when EXIF is hidden
             <div className="viewer-controls">
               {file.type === 'image' && <button title="Show EXIF" onClick={handleShowExif}>ℹ️</button>}
-              <button title="Like" onClick={handleLikeClick}>❤️</button>
+              <button title={file.liked ? "Unlike" : "Like"} onClick={handleLikeClick} className="heart-button">
+                <HeartIcon liked={file.liked} size={20} />
+              </button>
               <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
               {/* ✅ Add Close button here */}
               <button title="Close Viewer" onClick={handleCloseClick}>&times;</button>
             </div>
           )}
-           {/* Show controls again when EXIF is expanded */}
-           {showExif && (
-             <div className="viewer-controls">
-                {file.type === 'image' && <button title="Hide EXIF" onClick={handleShowExif}>ℹ️</button>}
-                <button title="Like" onClick={handleLikeClick}>❤️</button>
-                <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
-                {/* ✅ Add Close button here too */}
-                <button title="Close Viewer" onClick={handleCloseClick}>&times;</button>
-             </div>
-            )}
+          {/* Show controls again when EXIF is expanded */}
+          {showExif && (
+            <div className="viewer-controls">
+              {file.type === 'image' && <button title="Hide EXIF" onClick={handleShowExif}>ℹ️</button>}
+              <button title={file.liked ? "Unlike" : "Like"} onClick={handleLikeClick} className="heart-button">
+                <HeartIcon liked={file.liked} size={20} />
+              </button>
+              <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+              {/* ✅ Add Close button here too */}
+              <button title="Close Viewer" onClick={handleCloseClick}>&times;</button>
+            </div>
+          )}
         </div>
       )}
     </div>

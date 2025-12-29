@@ -21,13 +21,16 @@ services:
       # Core requirements - shared data volume for database
       - vuvur_local_dev:/app/data
 
-      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/txt2img-images
+      # Required, for liked and recyclebin feature.
+      - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
+      - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
+      
+      # - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/txt2img-images
       # - /mnt/z/Locals/system/outputs/videos:/mnt/gallery/videos
       
-      # - /mnt/z/Locals/system/outputs/samples-images:/mnt/gallery/images
-      - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
+      - /mnt/z/Locals/system/outputs/samples-images:/mnt/gallery/samples-images
       - /mnt/z/Locals/system/outputs/samples-vids:/mnt/gallery/videos
-      - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
+
     # restart: unless-stopped
     environment:
       # Set to 1 hour (3600s). Set to 0 to disable periodic scanning.
@@ -41,18 +44,14 @@ services:
     build:
       context: ./api
     command: python scanner_service.py
-    volumes:
-      # Share gallery volumes with API for scanning
-      - /mnt/z/Locals/system/outputs/txt2img-images:/mnt/gallery/txt2img-images
-      - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
-      - /mnt/z/Locals/system/outputs/samples-vids:/mnt/gallery/videos
-      - /mnt/z/Locals/system/outputs/recyclebin:/mnt/gallery/recyclebin
-      # Share data directory for database and locks
-      - vuvur_local_dev:/app/data
+    # Use volumes_from to inherit all volumes from API service
+    # Scanner will scan whatever is mounted at /mnt/gallery
+    volumes_from:
+      - api
     # restart: unless-stopped
     environment:
       - INITIAL_SCAN_MAX_MEDIA=10000
-      - SCAN_INTERVAL=60
+      - SCAN_INTERVAL=30
     depends_on:
       - api
 

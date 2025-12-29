@@ -598,3 +598,41 @@ body.no-scroll {
   line-height: 1.5;
   font-family: monospace;
 }
+
+/* --- HEART BUTTON STYLES --- */
+.heart-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem !important;
+}
+
+.heart-icon {
+  transition: all 0.3s ease;
+  display: block;
+}
+
+.heart-icon.liked {
+  color: #ff4757;
+  animation: heartPulse 0.3s ease;
+}
+
+.heart-icon.not-liked {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.heart-button:hover .heart-icon.liked {
+  color: #ff6b81;
+  transform: scale(1.15);
+}
+
+.heart-button:hover .heart-icon.not-liked {
+  color: #ff4757;
+  transform: scale(1.15);
+}
+
+@keyframes heartPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
