@@ -39,7 +39,7 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
             {file.type === 'video' && <div className="media-type-overlay">▶</div>}
             {file.type === 'audio' && <div className="media-type-overlay">🎵</div>}
             <div className="image-dimension-overlay">
-              {file.type === 'audio' ? 'Audio' : (file.width > 0 ? `${file.width} x ${file.height}` : 'Video')}
+              {file.type === 'audio' ? file.filename : (file.width > 0 ? `${file.width} x ${file.height}` : 'Video')}
             </div>
           </div>
         );

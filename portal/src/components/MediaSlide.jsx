@@ -168,6 +168,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
           />
         ) : file.type === 'audio' ? (
           <div className="audio-player-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <h3 style={{ color: 'white', marginBottom: '20px', textAlign: 'center' }}>{file.filename}</h3>
             <img
               src={`/api/thumbnails/${file.id}`}
               alt="Audio Placeholder"
