@@ -134,7 +134,7 @@ def scan(limit=None):
     # If limit is set, we will NOT perform deletion, so we don't strictly need to track everything found if we exit early.
     all_disk_paths = [] 
     
-    valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv"}
+    valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}
     
     limit_reached = False
     
@@ -208,7 +208,12 @@ def scan(limit=None):
         # Since I am replacing the whole block, I will just paste the logic here.
         try:
             ext = os.path.splitext(path)[1].lower()
-            ftype = "image" if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"} else "video"
+            if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
+                ftype = "image"
+            elif ext in {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}:
+                ftype = "audio"
+            else:
+                ftype = "video"
             stat = os.stat(path)
             width, height, user_comment, exif = get_metadata(path, ftype)
             
@@ -282,4 +287,5 @@ def get_metadata(path, ftype):
             logger.error(f"Could not get image dimensions for {path}: {e}")
     elif ftype == 'video':
         width, height = get_video_dimensions(path)
+    # Audio files just return None for everything
     return width, height, user_comment, exif

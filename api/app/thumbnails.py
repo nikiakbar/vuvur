@@ -2,7 +2,7 @@ import os
 import subprocess
 import logging
 from flask import Blueprint, send_file, abort
-from PIL import Image, ImageSequence # Import ImageSequence for GIF handling
+from PIL import Image, ImageSequence, ImageDraw # Import ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
 
@@ -62,6 +62,21 @@ def create_video_thumb(src, dst):
         logger.error(f"ffmpeg failed for {src}: {e.stderr}")
         raise
 
+def create_audio_thumb(dst):
+    """Creates a placeholder thumbnail for audio files."""
+    try:
+        # Create a 600x600 dark grey square
+        img = Image.new('RGB', (600, 600), color=(50, 50, 50))
+        d = ImageDraw.Draw(img)
+        # We can't easily rely on fonts being present, so just draw a simple shape
+        # Draw a lighter grey circle in the middle
+        d.ellipse([150, 150, 450, 450], fill=(100, 100, 100))
+        img.save(dst, "JPEG", quality=90)
+        logger.info(f"Successfully saved audio thumbnail to: {dst}")
+    except Exception as e:
+        logger.error(f"Failed to create audio thumbnail: {e}", exc_info=True)
+        raise
+
 def get_media_row(media_id):
     """Fetches a media record from the database by its ID."""
     conn = None
@@ -100,6 +115,12 @@ def thumb(mid):
         if row["type"] == "image":
              # Use 600x600 size, quality 90 for JPEGs
              create_image_version(src, dst, size=(600, 600), quality=90)
+        elif row["type"] == "audio":
+             # Audio gets a generic generated placeholder
+             dst_jpg = os.path.join(THUMB_DIR, f"{mid}.jpg")
+             create_audio_thumb(dst_jpg)
+             dst = dst_jpg
+             mime_type = "image/jpeg"
         else: # Videos always get a JPG thumb
              # Ensure dst is .jpg for video thumbs
              dst_jpg = os.path.join(THUMB_DIR, f"{mid}.jpg")

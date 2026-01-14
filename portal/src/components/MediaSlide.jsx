@@ -50,7 +50,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
   const [showExif, setShowExif] = useState(false);
 
   useEffect(() => {
-    if (videoRef.current) {
+    if (videoRef.current && (file.type === 'video' || file.type === 'audio')) {
       if (index === currentIndex) {
         videoRef.current.play().catch(error => { });
       } else {
@@ -166,6 +166,21 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
               pointerEvents: 'none'
             }}
           />
+        ) : file.type === 'audio' ? (
+          <div className="audio-player-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <img
+              src={`/api/thumbnails/${file.id}`}
+              alt="Audio Placeholder"
+              style={{ width: '300px', height: '300px', objectFit: 'cover', borderRadius: '10px', marginBottom: '20px' }}
+            />
+            <audio
+              ref={videoRef}
+              src={videoUrl}
+              controls
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: '500px' }}
+            />
+          </div>
         ) : (
           <video
             ref={videoRef}

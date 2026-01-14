@@ -30,15 +30,16 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
             className="gallery-item"
             onClick={() => onImageClick(index)}
           >
-            <LazyImage 
-              src={`/api/thumbnails/${file.id}`} 
+            <LazyImage
+              src={`/api/thumbnails/${file.id}`}
               alt={file.path}
               width={file.width}
               height={file.height}
             />
             {file.type === 'video' && <div className="media-type-overlay">▶</div>}
+            {file.type === 'audio' && <div className="media-type-overlay">🎵</div>}
             <div className="image-dimension-overlay">
-              {file.width > 0 ? `${file.width} x ${file.height}` : 'Video'}
+              {file.type === 'audio' ? 'Audio' : (file.width > 0 ? `${file.width} x ${file.height}` : 'Video')}
             </div>
           </div>
         );
