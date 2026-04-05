@@ -34,7 +34,7 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" == "main" ]; then
             echo "tag_suffix=main" >> $GITHUB_OUTPUT
-          elif [ "${{ github.ref_name }}" == "dev" ]; then
+          else
             echo "tag_suffix=dev" >> $GITHUB_OUTPUT
           fi
 
