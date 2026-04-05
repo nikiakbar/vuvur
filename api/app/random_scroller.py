@@ -3,8 +3,8 @@ from app.db import get_db
 from app.api_key_middleware import api_key_required
 
 bp = Blueprint("random_scroller", __name__)
-@api_key_required
 @bp.route("/api/files/random")
+@api_key_required
 def random_files():
     """Get a list of random media files."""
     try:
@@ -21,6 +21,7 @@ def random_files():
     return jsonify(items)
 
 @bp.route("/api/random-single")
+@api_key_required
 def random_single():
     """Get a single random media file, optionally matching a query."""
     q = request.args.get("q", "").strip()
