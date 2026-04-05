@@ -12,7 +12,7 @@ This document serves as the primary context for AI assistants working on the Vuv
 6.  **Modern Stack**: Use the latest stable versions of libraries and frameworks to ensure performance and maintainability.
 7.  **Periodic Scanning**: The app should perform periodic scans to detect new media files and update the database accordingly.
 8.  **Metadata Extraction**: The app should extract metadata from media files and store it in the database.
-9.  **Thumbnails**: The app should generate thumbnails for media files and store them in the database.
+9.  **Thumbnails (Hybrid)**: The app generates thumbnails lazily via API reads for instant access, while precomputing the rest in scanner idle intervals.
 10. **Streaming**: The app should stream media files to the client for playback.
 11. **Search**: The app should provide a search interface to search for media files by name, date, or other metadata.
 12. **Sorting**: The app should provide a sorting interface to sort media files by name, date, or other metadata.
@@ -71,7 +71,7 @@ This document serves as the primary context for AI assistants working on the Vuv
 
 ### Other Features
 - **Streaming**: Supports byte-range requests for efficient video playback.
-- **Thumbnails**: Dynamically generated and cached.
+- **Thumbnails**: Hybrid generation (lazy on API request, precomputed during idle scanner intervals) to balance instant availability and smooth UI scrolling.
 - **Search**: Full-text search using SQLite FTS5.
 
 ## ⚠️ Development Constraints
@@ -80,6 +80,7 @@ This document serves as the primary context for AI assistants working on the Vuv
 - **DO** ensure any layout changes maintain masonry behavior.
 - **DO** prioritize performance, especially for the initial scan experience.
 - **DO** use modern CSS and avoid heavy third-party UI libraries unless necessary.
+
 ## 📱 Android Client
 
 ### Overview
