@@ -80,4 +80,37 @@ This document serves as the primary context for AI assistants working on the Vuv
 - **DO** ensure any layout changes maintain masonry behavior.
 - **DO** prioritize performance, especially for the initial scan experience.
 - **DO** use modern CSS and avoid heavy third-party UI libraries unless necessary.
-- **DO** maintain separation between API workers (read) and scanner service (write during scans).
+## 📱 Android Client
+
+### Overview
+- **Type**: Native Android media gallery client.
+- **Purpose**: Browse, stream, and manage remote media served by the Vuvur backend.
+- **Architecture**: MVVM using modern Android Jetpack libraries.
+- **Language**: Kotlin.
+
+### Tech Stack
+- **UI**: Jetpack Compose (Material 3).
+- **Navigation**: Jetpack Navigation Compose.
+- **Networking**: Retrofit 2 & OkHttp 4.
+- **Image Loading**: Coil (with custom OkHttpClient for auth).
+- **Video**: Media3 ExoPlayer.
+- **Persistence**: Jetpack DataStore (Settings).
+- **Concurrency**: Coroutines & Flows.
+
+### Features
+- **Gallery**: Staggered grid (`LazyVerticalStaggeredGrid`) with infinite scroll, filtering (Tags, Groups), and sorting (Random, Oldest/Newest).
+- **Viewer**: Full-screen `VerticalPager`.
+  - **Images**: Deep zoom/panning.
+  - **Video**: Auto-play logic based on visibility via `isCurrentlyVisible`.
+- **Management**: Deletion (moves to server recycle bin).
+- **Settings**: Configurable API endpoints, zoom levels, and cache management.
+
+### Critical Implementation Details
+- **Authentication**: `X-Api-Key` header injected via:
+  - Retrofit Interceptor.
+  - Coil `ImageLoaderFactory`.
+  - ExoPlayer `DefaultHttpDataSource.Factory`.
+- **API Endpoints**: `/api/gallery`, `/api/stream/{id}`, `/api/thumbnails/{id}`, `/api/gallery/groups`.
+- **Data Models**:
+  - `MediaFile`: `id`, `path`, `type`, `width`, `height`, `mod_time`, `exif`.
+  - `GalleryUiState`: Sealed interface (Loading, Scanning, Error, Success).
