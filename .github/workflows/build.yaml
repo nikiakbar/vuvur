@@ -48,6 +48,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push ${{ matrix.service }} image
+        id: build_push
         if: steps.set_suffix.outputs.tag_suffix != ''
         uses: docker/build-push-action@v5
         with:
@@ -55,3 +56,15 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Portainer Webhook
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            curl -X POST https://portainer.nixy.vip/api/stacks/webhooks/8cdf026f-039a-4f00-8f47-ae265894183a
+          else
+            curl -X POST https://portainer.nixy.vip/api/stacks/webhooks/d1e9292d-425c-49f1-a906-b5c7acd5b2f2
+          fi
