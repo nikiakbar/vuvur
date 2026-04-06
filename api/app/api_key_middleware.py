@@ -1,4 +1,5 @@
 import os
+import secrets
 from functools import wraps
 from flask import request, jsonify
 
@@ -15,7 +16,7 @@ def api_key_required(f):
 
         # Check if the 'X-Api-Key' header was provided and if it matches
         provided_key = request.headers.get("X-Api-Key")
-        if provided_key and provided_key == API_SECRET:
+        if provided_key and secrets.compare_digest(provided_key, API_SECRET):
             # Key is valid, proceed with the original function
             return f(*args, **kwargs)
         
