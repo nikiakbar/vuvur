@@ -4,8 +4,8 @@ from app.db import DB_PATH
 from app.api_key_middleware import api_key_required
 
 search_bp = Blueprint("search", __name__)
-@api_key_required
 @search_bp.route("/api/search")
+@api_key_required
 def search():
     q = request.args.get("q", "").strip()
     if not q:

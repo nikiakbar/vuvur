@@ -7,8 +7,8 @@ from app.api_key_middleware import api_key_required
 
 bp = Blueprint("gallery", __name__)
 GALLERY_PATH = "/mnt/gallery" # Ensure this matches scanner.py
-@api_key_required
 @bp.route("/api/gallery")
+@api_key_required
 def gallery():
     """
     Get a paginated list of media items with sorting, searching, and group/subgroup filtering.
