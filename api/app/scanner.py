@@ -7,6 +7,7 @@ import json
 import concurrent.futures
 import time  # Import the time module
 from app.db import DB_PATH, init_db
+from app.thumbnails import create_image_version, create_video_thumb, create_audio_thumb, THUMB_DIR
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 import piexif
@@ -289,3 +290,70 @@ def get_metadata(path, ftype):
         width, height = get_video_dimensions(path)
     # Audio files just return None for everything
     return width, height, user_comment, exif
+
+def precompute_missing_thumbnails(batch_size=50):
+    """
+    Finds missing thumbnails in the background and generates them.
+    Returns True if some thumbnails were missing, False if all caught up.
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        # Query media, ordered by ID DESC to prioritize new files
+        c.execute("SELECT id, path, type FROM media ORDER BY id DESC")
+        rows = c.fetchall()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Database error while fetching media for thumbnails: {e}")
+        return False
+
+    missing_items = []
+    for row in rows:
+        mid = row['id']
+        src = row['path']
+        ftype = row['type']
+        
+        is_gif = src.lower().endswith(".gif")
+        thumb_ext = ".gif" if is_gif else ".jpg"
+        dst = os.path.join(THUMB_DIR, f"{mid}{thumb_ext}")
+        
+        # Audio and Video thumbs are always .jpg
+        if ftype in ("audio", "video"):
+            dst = os.path.join(THUMB_DIR, f"{mid}.jpg")
+
+        if not os.path.exists(dst):
+            missing_items.append((row, dst))
+            if len(missing_items) >= batch_size:
+                break
+                
+    if not missing_items:
+        return False
+        
+    logger.info(f"Precomputing thumbnails for {len(missing_items)} missing items...")
+    
+    def process_thumb(item):
+        row, dst_path = item
+        src_path = row['path']
+        f_type = row['type']
+        media_id = row['id']
+        
+        if not os.path.exists(src_path):
+            return # Original file deleted, skip
+            
+        try:
+            if f_type == "image":
+                 create_image_version(src_path, dst_path, size=(600, 600), quality=90)
+            elif f_type == "audio":
+                 create_audio_thumb(dst_path)
+            else:
+                 create_video_thumb(src_path, dst_path)
+        except Exception as e:
+            logger.error(f"Failed to precompute thumb for media ID {media_id}: {e}")
+            
+    # Use ThreadPoolExecutor to speed up generation, especially for many images
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(process_thumb, missing_items))
+        
+    return True

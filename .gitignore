@@ -2,3 +2,25 @@
 .venv/
 __pycache__
 portal/node_modules/
+
+# Android
+android/.idea/
+!android/.idea/gradle.xml
+!android/.idea/misc.xml
+!android/.idea/runConfigurations/
+!android/.idea/vcs.xml
+
+android/.gradle/
+android/build/
+android/local.properties
+
+android/captures/
+android/*.apk
+android/*.aab
+android/*.ap_
+android/*.dex
+android/*.iml
+
+android/.cxx/
+android/.externalNativeBuild/
+android/.kotlin/

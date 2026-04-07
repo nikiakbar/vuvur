@@ -1,0 +1,122 @@
+name: Android Release Build
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Bump Version
+        id: bump_version
+        run: |
+          # Read current version
+          CURRENT_VERSION=$(grep "app.versionName" gradle.properties | cut -d'=' -f2)
+          echo "Current version: $CURRENT_VERSION"
+
+          # Increment patch version (supports X.Y and X.Y.Z)
+          if [[ $CURRENT_VERSION =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+              NEW_VERSION="${BASH_REMATCH[1]}.$((BASH_REMATCH[2] + 1))"
+          elif [[ $CURRENT_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              NEW_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+          else
+              NEW_VERSION="$CURRENT_VERSION.1"
+          fi
+          
+          # Update gradle.properties
+          sed -i "s/app.versionName=.*/app.versionName=$NEW_VERSION/" gradle.properties
+          
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            # Note: This keeps the suffix as "-dev". 
+            # If we want the actual branch name (e.g., -feature-login), use ${GITHUB_REF_NAME} instead of "dev" below.
+            VERSION_STRING="${NEW_VERSION}-dev.${GITHUB_RUN_NUMBER}"
+          else
+            VERSION_STRING="${NEW_VERSION}"
+          fi
+
+          echo "version=$VERSION_STRING" >> $GITHUB_OUTPUT
+          echo "New version: $VERSION_STRING"
+
+      - name: Commit and Push Version Bump
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add gradle.properties
+          git commit -m "chore: bump version to v${{ steps.bump_version.outputs.version }} [skip ci]"
+          git push
+
+      - run: chmod +x gradlew
+
+      - name: Build APK
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            ./gradlew :app:assembleDevDebug -PversionCode=${{ github.run_number }}
+          else
+            ./gradlew :app:assembleProdDebug -PversionCode=${{ github.run_number }}
+          fi
+
+      - name: Rename APK if dev branch
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            APK_PATH=$(ls app/build/outputs/apk/dev/debug/*.apk | head -n 1)
+          else
+            APK_PATH=$(ls app/build/outputs/apk/prod/debug/*.apk | head -n 1)
+          fi
+          
+          APK_NAME=$(basename "$APK_PATH")
+          echo "Original APK: $APK_NAME"
+
+          # Check if NOT main
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            NEW_APK_NAME="dev-$APK_NAME"
+            mv "$APK_PATH" "app/build/outputs/apk/dev/debug/$NEW_APK_NAME"
+            echo "Renamed APK: $NEW_APK_NAME"
+          else
+            echo "APK name unchanged"
+          fi
+
+      - name: Upload APK to GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.bump_version.outputs.version }}
+          name: Release v${{ steps.bump_version.outputs.version }}
+          files: |
+            android/app/build/outputs/apk/dev/debug/*.apk
+            android/app/build/outputs/apk/prod/debug/*.apk
+          prerelease: ${{ github.ref_name != 'main' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print APK name
+        run: |
+          ls -R app/build/outputs/apk/
+
+      - name: Send Release URL to Telegram
+        run: |
+          RELEASE_URL="${{ steps.create_release.outputs.url }}"
+          VERSION="${{ steps.bump_version.outputs.version }}"
+          echo "Sending Release URL: $RELEASE_URL"
+
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="New APK release available: v$VERSION ($RELEASE_URL)"

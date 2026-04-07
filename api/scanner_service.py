@@ -6,7 +6,7 @@ Runs independently from API workers to avoid lock contention and timeouts.
 import logging
 import os
 import time
-from app.scanner import scan
+from app.scanner import scan, precompute_missing_thumbnails
 from app.db import init_db
 
 # Configure logging
@@ -57,7 +57,24 @@ def main():
     
     logger.info(f"Starting periodic scan loop (interval: {scan_interval}s)...")
     while True:
-        time.sleep(scan_interval)
+        # Utilize the scan_interval window to precompute thumbnails
+        start_wait = time.time()
+        while time.time() - start_wait < scan_interval:
+            try:
+                processed_any = precompute_missing_thumbnails(batch_size=50)
+                if processed_any:
+                    # Very small sleep to yield CPU between batches
+                    time.sleep(1)
+                    continue
+                else:
+                    # Caught up, sleep until next check or interval ends
+                    remaining = scan_interval - (time.time() - start_wait)
+                    if remaining > 0:
+                        time.sleep(min(remaining, 60))
+            except Exception as e:
+                logger.error(f"Error during thumbnail precomputation: {e}", exc_info=True)
+                time.sleep(60) # Prevent tight error loops
+                
         try:
             logger.info("Starting periodic scan (no limit)...")
             scan(limit=None)

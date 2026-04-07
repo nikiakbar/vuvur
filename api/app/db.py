@@ -70,7 +70,11 @@ def init_db():
 
     c.execute("CREATE INDEX IF NOT EXISTS idx_media_group_tag ON media (group_tag);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_media_path ON media (path);")
-    
+    # ⚡ Bolt: Added indexes on mtime and filename to optimize gallery sorting.
+    # Expected impact: Eliminates full table scans and temporary B-tree sorts for gallery views.
+    # Reduces query time from O(N log N) to O(K) where K is the page size, assuming index usage.
+    c.execute("CREATE INDEX IF NOT EXISTS idx_media_mtime ON media (mtime);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_media_filename ON media (filename);")
     
     conn.commit()
     conn.close()
