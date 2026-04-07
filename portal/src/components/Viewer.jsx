@@ -71,21 +71,35 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
     <div className="viewer-overlay" ref={scrollContainerRef}>
       {/* The top-right close button is gone */}
 
-      {files.map((file, index) => (
-        // Ensure each slide div has a unique key and the data-index attribute
-        <div key={file.id || file.path || index} ref={(el) => (slideRefs.current[index] = el)} data-index={index}>
-          <MediaSlide
-            file={file}
-            index={index}
-            currentIndex={currentIndex} // Pass current index to MediaSlide
-            onLike={() => onLike(file.id)}
-            onDelete={() => onDelete(file.id)} // Pass direct delete handler for button
-            onClose={onClose} // Pass onClose down to MediaSlide
-            showControls={true}
-            zoomLevel={zoomLevel || 2.5}
-          />
-        </div>
-      ))}
+      {files.map((file, index) => {
+        // ⚡ Bolt: Virtualization - only render MediaSlide for items near the current index.
+        // This prevents the browser from eagerly loading hundreds of images/videos,
+        // significantly reducing memory usage and network congestion in large galleries.
+        // We keep the wrapper div to maintain the scroll container's layout and snap points.
+        const isVisible = Math.abs(index - currentIndex) <= 2;
+
+        return (
+          <div
+            key={file.id || file.path || index}
+            ref={(el) => (slideRefs.current[index] = el)}
+            data-index={index}
+            style={{ height: '100vh', scrollSnapAlign: 'start' }}
+          >
+            {isVisible && (
+              <MediaSlide
+                file={file}
+                index={index}
+                currentIndex={currentIndex}
+                onLike={() => onLike(file.id)}
+                onDelete={() => onDelete(file.id)}
+                onClose={onClose}
+                showControls={true}
+                zoomLevel={zoomLevel || 2.5}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
