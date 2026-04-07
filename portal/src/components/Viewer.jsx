@@ -67,25 +67,38 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
 
   if (!files || files.length === 0) return null;
 
+  // ⚡ Bolt: Virtualization optimization.
+  // We only render the current slide and its immediate neighbors to reduce DOM size and React overhead.
+  // This prevents O(N) rendering where N is the number of items in the gallery.
+  // A buffer of 2 on each side ensures smooth scrolling while keeping component count minimal.
+  const VIRTUAL_BUFFER = 2;
+
   return (
     <div className="viewer-overlay" ref={scrollContainerRef}>
       {/* The top-right close button is gone */}
 
-      {files.map((file, index) => (
-        // Ensure each slide div has a unique key and the data-index attribute
-        <div key={file.id || file.path || index} ref={(el) => (slideRefs.current[index] = el)} data-index={index}>
-          <MediaSlide
-            file={file}
-            index={index}
-            currentIndex={currentIndex} // Pass current index to MediaSlide
-            onLike={() => onLike(file.id)}
-            onDelete={() => onDelete(file.id)} // Pass direct delete handler for button
-            onClose={onClose} // Pass onClose down to MediaSlide
-            showControls={true}
-            zoomLevel={zoomLevel || 2.5}
-          />
-        </div>
-      ))}
+      {files.map((file, index) => {
+        const isVisible = Math.abs(index - currentIndex) <= VIRTUAL_BUFFER || index === initialIndex;
+
+        return (
+          // Ensure each slide div has a unique key and the data-index attribute
+          // We MUST keep the wrapper div rendered to maintain the scroll height and snapping points.
+          <div key={file.id || file.path || index} ref={(el) => (slideRefs.current[index] = el)} data-index={index}>
+            {isVisible && (
+              <MediaSlide
+                file={file}
+                index={index}
+                currentIndex={currentIndex} // Pass current index to MediaSlide
+                onLike={() => onLike(file.id)}
+                onDelete={() => onDelete(file.id)} // Pass direct delete handler for button
+                onClose={onClose} // Pass onClose down to MediaSlide
+                showControls={true}
+                zoomLevel={zoomLevel || 2.5}
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
