@@ -6,8 +6,8 @@ from app.api_key_middleware import api_key_required
 
 bp = Blueprint("subgroups", __name__)
 GALLERY_PATH = "/mnt/gallery" # Ensure this matches scanner.py
-@api_key_required
 @bp.route("/api/gallery/subgroups")
+@api_key_required
 def get_subgroups():
     """
     Get a list of unique second-level directory names (subgroups)
