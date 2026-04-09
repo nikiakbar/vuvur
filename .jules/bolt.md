@@ -9,3 +9,7 @@
 ## 2025-05-15 - [Viewer Virtualization Bottleneck]
 **Learning:** Rendering all media items in a scrolling viewer simultaneously creates a massive DOM and overhead for React's reconciliation, especially as the gallery grows. Even with CSS scroll snapping, the number of component instances can reach hundreds, degrading performance.
 **Action:** Implement windowing/virtualization to only render the current item and its immediate neighbors, significantly reducing DOM nodes and memory usage.
+
+## 2025-05-15 - [SQLite FTS5 vs LIKE for Search]
+**Learning:** Using `LIKE '%term%'` on large text columns causes a full table scan. SQLite's FTS5 virtual table provides O(log N) search performance. Additionally, ensure SQL placeholders and binding parameters match to avoid runtime `ProgrammingError`.
+**Action:** Always prefer FTS5 for search functionality and verify query binding counts during optimization.
