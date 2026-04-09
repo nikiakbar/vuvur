@@ -13,3 +13,7 @@
 ## 2025-05-15 - [SQLite FTS5 vs LIKE for Search]
 **Learning:** Using `LIKE '%term%'` on large text columns causes a full table scan. SQLite's FTS5 virtual table provides O(log N) search performance. Additionally, ensure SQL placeholders and binding parameters match to avoid runtime `ProgrammingError`.
 **Action:** Always prefer FTS5 for search functionality and verify query binding counts during optimization.
+
+## 2026-04-09 - [Optimizing Random Selection and Caching]
+**Learning:** Using `ORDER BY RANDOM()` on large tables is slow because it sorts full rows in memory. The "Late Row Lookup" pattern (sorting IDs in a subquery and joining) significantly improves performance. Additionally, enabling browser caching for thumbnails and using `decoding="async"` for images reduces perceived latency and main-thread blocking.
+**Action:** Always use Late Row Lookup for random selection on tables with large blobs, and leverage browser-level optimizations for asset loading.

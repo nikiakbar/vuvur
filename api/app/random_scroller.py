@@ -14,7 +14,12 @@ def random_files():
         
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT * FROM media ORDER BY RANDOM() LIMIT ?", (count,))
+    # ⚡ Bolt: Late Row Lookup optimization.
+    # Sorting only the IDs by RANDOM() is significantly faster than sorting full rows (with EXIF).
+    c.execute("""
+        SELECT m.* FROM media m
+        JOIN (SELECT id FROM media ORDER BY RANDOM() LIMIT ?) as t ON m.id = t.id
+    """, (count,))
     items = [dict(row) for row in c.fetchall()]
     conn.close()
     
@@ -31,19 +36,25 @@ def random_single():
     
     item = None
     if q:
-        # ✅ MODIFICATION: Reverted to the more efficient FTS5 query.
+        # ⚡ Bolt: Late Row Lookup for random selection with FTS.
         c.execute("""
             SELECT m.*
-            FROM media_fts f
-            JOIN media m ON m.id = f.rowid
-            WHERE media_fts MATCH ?
-            ORDER BY RANDOM() 
-            LIMIT 1
+            FROM media m
+            JOIN (
+                SELECT rowid
+                FROM media_fts
+                WHERE media_fts MATCH ?
+                ORDER BY RANDOM()
+                LIMIT 1
+            ) as t ON m.id = t.rowid
         """, (f'{q}*',))
         item = c.fetchone()
     else:
-        # If no query, get a random item from the entire library
-        c.execute("SELECT * FROM media ORDER BY RANDOM() LIMIT 1")
+        # ⚡ Bolt: Late Row Lookup for random selection from entire library.
+        c.execute("""
+            SELECT m.* FROM media m
+            JOIN (SELECT id FROM media ORDER BY RANDOM() LIMIT 1) as t ON m.id = t.id
+        """)
         item = c.fetchone()
         
     conn.close()

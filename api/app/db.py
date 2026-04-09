@@ -8,7 +8,11 @@ ph = PasswordHasher()
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # ⚡ Bolt: WAL mode for better concurrency, NORMAL synchronous for balance of speed and safety,
+    # and a larger cache to reduce disk I/O.
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA cache_size=-10000;") # 10MB cache
     return conn
 
 

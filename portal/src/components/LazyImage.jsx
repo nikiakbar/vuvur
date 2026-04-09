@@ -46,6 +46,7 @@ const LazyImage = ({ src, alt, width, height }) => {
           src={src}
           alt={alt}
           className="lazy-image loaded"
+          decoding="async"
         />
       )}
     </div>
