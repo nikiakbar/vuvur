@@ -129,6 +129,8 @@ def thumb(mid):
              dst = dst_jpg
              mime_type = "image/jpeg"
              
-    return send_file(dst, mimetype=mime_type)
+    # ⚡ Bolt: Enable long-term browser caching for thumbnails.
+    # Since thumbnails are derived from unique media IDs, we can cache them for a long time (1 year).
+    return send_file(dst, mimetype=mime_type, max_age=31536000)
 
 # The /api/preview endpoint has been removed.
