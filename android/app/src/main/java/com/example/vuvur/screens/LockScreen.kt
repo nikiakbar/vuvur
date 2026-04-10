@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -30,7 +31,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun LockScreen(onUnlock: () -> Unit) {
-    var enteredCode by remember { mutableStateOf("") }
+    var enteredCode by rememberSaveable { mutableStateOf("") }
     val correctCode = "357159"
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
