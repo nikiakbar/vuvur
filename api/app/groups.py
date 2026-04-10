@@ -3,8 +3,8 @@ from app.db import get_db
 from app.api_key_middleware import api_key_required
 
 bp = Blueprint("groups", __name__)
-@api_key_required
 @bp.route("/api/gallery/groups")
+@api_key_required
 def get_groups():
     """
     Get a list of all unique group_tags and the count of items in each.

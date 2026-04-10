@@ -3,6 +3,9 @@ name: Build and Push Docker Images
 on:
   push:
     branches: [ "main", "dev" ]
+    paths:
+      - 'api/**'
+      - 'portal/**'
   workflow_dispatch:
 
 concurrency:

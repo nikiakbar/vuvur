@@ -7,8 +7,8 @@ from app.api_key_middleware import api_key_required
 scan_bp = Blueprint("scan", __name__)
 INITIAL_SCAN_FLAG_PATH = "/app/data/.initial_scan_complete"
 SCAN_STATUS_PATH = "/app/data/scan_status.json"
-@api_key_required
 @scan_bp.route("/api/scan/status", methods=["GET"])
+@api_key_required
 def scan_status():
     """Checks the status of the library scan."""
     is_complete = os.path.exists(INITIAL_SCAN_FLAG_PATH)
@@ -27,6 +27,7 @@ def scan_status():
     })
 
 @scan_bp.route("/api/scan", methods=["POST"])
+@api_key_required
 def trigger_scan():
     """Triggers a library scan."""
     try:
@@ -37,6 +38,7 @@ def trigger_scan():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @scan_bp.route("/api/cache/cleanup", methods=["POST"])
+@api_key_required
 def cleanup_cache():
     """Triggers a library re-scan."""
     try:

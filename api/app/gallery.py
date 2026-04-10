@@ -7,8 +7,8 @@ from app.api_key_middleware import api_key_required
 
 bp = Blueprint("gallery", __name__)
 GALLERY_PATH = "/mnt/gallery" # Ensure this matches scanner.py
-@api_key_required
 @bp.route("/api/gallery")
+@api_key_required
 def gallery():
     """
     Get a paginated list of media items with sorting, searching, and group/subgroup filtering.
@@ -61,9 +61,12 @@ def gallery():
     total_items = total_row["cnt"] if total_row else 0
     total_pages = (total_items + limit - 1) // limit if limit > 0 else 1
 
-    # Apply sorting logic correctly
+    # ⚡ Bolt: Late Row Lookup optimization for random sorting.
+    # Sorting IDs in a subquery is much faster than sorting full rows with EXIF blobs.
     if sort == "random":
-        sql += " ORDER BY RANDOM()"
+        sql = f"SELECT m.* FROM media m JOIN (SELECT media.id {base_sql} {join_sql} {where_sql} ORDER BY RANDOM() LIMIT ? OFFSET ?) as t ON m.id = t.id"
+        params.extend([limit, offset])
+        c.execute(sql, tuple(params))
     elif sort == "date_desc":
         sql += " ORDER BY mtime DESC"
     elif sort == "date_asc":
@@ -77,11 +80,11 @@ def gallery():
          sql += " ORDER BY mtime DESC"
 
 
-    # Add pagination
-    sql += " LIMIT ? OFFSET ?"
-    params.extend([limit, offset])
-
-    c.execute(sql, tuple(params))
+    if sort != "random":
+        # Add pagination
+        sql += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        c.execute(sql, tuple(params))
 
     # Decode the exif string into a dictionary
     items = []

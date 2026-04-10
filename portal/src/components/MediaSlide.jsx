@@ -161,6 +161,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
           <img
             src={imageUrl}
             alt={file.path}
+            decoding="async"
             style={{
               transform: `scale(${isZoomed ? zoomLevel : 1}) translate(${currentPan.x}px, ${currentPan.y}px)`,
               pointerEvents: 'none'
