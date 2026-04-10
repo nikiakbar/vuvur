@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -101,7 +102,7 @@ fun AppNavigation() {
     val app = context.applicationContext as VuvurApplication
     val repository = app.settingsRepository
     val passcode by repository.passcodeFlow.collectAsState(initial = "LOADING")
-    var isUnlocked by remember { mutableStateOf(false) }
+    var isUnlocked by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     if (passcode == "LOADING") {
