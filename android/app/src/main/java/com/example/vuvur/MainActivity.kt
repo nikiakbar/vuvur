@@ -97,10 +97,31 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as VuvurApplication
+    val repository = app.settingsRepository
+    val passcode by repository.passcodeFlow.collectAsState(initial = "LOADING")
     var isUnlocked by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    if (!isUnlocked) {
-        LockScreen(onUnlock = { isUnlocked = true })
+    if (passcode == "LOADING") {
+        // Just a blank screen or loading indicator while we read from DataStore
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {}
+    } else if (passcode == null) {
+        LockScreen(
+            isSetupMode = true,
+            onPasscodeSet = { newPasscode ->
+                scope.launch {
+                    repository.savePasscode(newPasscode)
+                    isUnlocked = true
+                }
+            }
+        )
+    } else if (!isUnlocked) {
+        LockScreen(
+            correctCode = passcode,
+            onUnlock = { isUnlocked = true }
+        )
     } else {
         val navController = rememberNavController()
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)

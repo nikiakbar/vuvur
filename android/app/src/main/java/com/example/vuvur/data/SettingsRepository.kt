@@ -35,6 +35,7 @@ class SettingsRepository(
         val ACTIVE_API_URL = stringPreferencesKey("active_api_url")
         val API_LIST = stringSetPreferencesKey("api_list")
         val ZOOM_LEVEL = floatPreferencesKey("zoom_level")
+        val PASSCODE = stringPreferencesKey("passcode")
     }
 
     // Use a default list relevant to your setup or common defaults
@@ -72,6 +73,10 @@ class SettingsRepository(
 
     val zoomLevelFlow: Flow<Float> = dataStore.data.map { preferences ->
         preferences[PreferencesKeys.ZOOM_LEVEL] ?: 2.5f
+    }
+
+    val passcodeFlow: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[PreferencesKeys.PASSCODE]
     }
 
     private val _refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
@@ -114,6 +119,12 @@ class SettingsRepository(
             preferences[PreferencesKeys.ZOOM_LEVEL] = level
         }
         _zoomChanged.emit(level)
+    }
+
+    suspend fun savePasscode(passcode: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.PASSCODE] = passcode
+        }
     }
 
     suspend fun addApiUrlToList(url: String) {
