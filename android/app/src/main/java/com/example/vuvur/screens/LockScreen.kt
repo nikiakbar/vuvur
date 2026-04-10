@@ -29,11 +29,24 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 @Composable
-fun LockScreen(onUnlock: () -> Unit) {
+fun LockScreen(
+    isSetupMode: Boolean = false,
+    correctCode: String? = null,
+    onUnlock: () -> Unit = {},
+    onPasscodeSet: (String) -> Unit = {}
+) {
     var enteredCode by remember { mutableStateOf("") }
-    val correctCode = "357159"
+    var firstEntry by remember { mutableStateOf("") }
+    var isConfirming by remember { mutableStateOf(false) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    val title = when {
+        isSetupMode && !isConfirming -> "Create Passcode"
+        isSetupMode && isConfirming -> "Confirm Passcode"
+        else -> "Enter Passcode"
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -42,48 +55,73 @@ fun LockScreen(onUnlock: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Enter Passcode", fontSize = 24.sp)
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(
-            value = enteredCode,
-            onValueChange = { },
-            label = { Text("Passcode") },
-            visualTransformation = PasswordVisualTransformation(),
-            readOnly = true,
-            modifier = Modifier.width(200.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        NumericKeypad(onKeyPress = { key ->
-            if (key == "backspace") {
-                if (enteredCode.isNotEmpty()) {
-                    enteredCode = enteredCode.dropLast(1)
-                }
-            } else if (enteredCode.length < 6) {
-                enteredCode += key
-                if (enteredCode.length == 6) {
-                    if (enteredCode == correctCode) {
-                        onUnlock()
-                    } else {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Incorrect passcode")
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(title, fontSize = 24.sp)
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = enteredCode,
+                onValueChange = { },
+                label = { Text("Passcode") },
+                visualTransformation = PasswordVisualTransformation(),
+                readOnly = true,
+                modifier = Modifier.width(200.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            NumericKeypad(onKeyPress = { key ->
+                if (key == "backspace") {
+                    if (enteredCode.isNotEmpty()) {
+                        enteredCode = enteredCode.dropLast(1)
+                    }
+                } else if (enteredCode.length < 6) {
+                    enteredCode += key
+                    if (enteredCode.length == 6) {
+                        if (isSetupMode) {
+                            if (!isConfirming) {
+                                firstEntry = enteredCode
+                                enteredCode = ""
+                                isConfirming = true
+                            } else {
+                                if (enteredCode == firstEntry) {
+                                    onPasscodeSet(enteredCode)
+                                } else {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Passcodes do not match. Start over.")
+                                    }
+                                    enteredCode = ""
+                                    firstEntry = ""
+                                    isConfirming = false
+                                }
+                            }
+                        } else {
+                            if (enteredCode == correctCode) {
+                                onUnlock()
+                            } else {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Incorrect passcode")
+                                }
+                                enteredCode = ""
+                            }
                         }
-                        enteredCode = ""
                     }
                 }
+            })
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    enteredCode = ""
+                    if (isSetupMode) {
+                        firstEntry = ""
+                        isConfirming = false
+                    }
+                },
+                modifier = Modifier.height(56.dp).width(120.dp)
+            ) {
+                Text("Clear", fontSize = 18.sp)
             }
-        })
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = { enteredCode = "" },
-            modifier = Modifier.height(56.dp).width(120.dp)
-        ) {
-            Text("Clear", fontSize = 18.sp)
         }
-    }
     }
 }
 
