@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,9 +36,9 @@ fun LockScreen(
     onUnlock: () -> Unit = {},
     onPasscodeSet: (String) -> Unit = {}
 ) {
-    var enteredCode by remember { mutableStateOf("") }
-    var firstEntry by remember { mutableStateOf("") }
-    var isConfirming by remember { mutableStateOf(false) }
+    var enteredCode by rememberSaveable { mutableStateOf("") }
+    var firstEntry by rememberSaveable { mutableStateOf("") }
+    var isConfirming by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
