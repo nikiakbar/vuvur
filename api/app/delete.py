@@ -9,8 +9,8 @@ bp = Blueprint("delete", __name__)
 
 # Define the path to the recycle bin
 RECYCLEBIN_PATH = "/mnt/gallery/recyclebin"
-@api_key_required
 @bp.route("/api/delete/<int:mid>", methods=["POST"])
+@api_key_required
 def delete_media_item(mid):
     """
     Moves a media file to the recycle bin and deletes its DB record.
