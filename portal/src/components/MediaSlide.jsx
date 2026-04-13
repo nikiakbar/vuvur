@@ -205,25 +205,25 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
           ) : (
             // Only show controls when EXIF is hidden
             <div className="viewer-controls">
-              {file.type === 'image' && <button title="Show EXIF" onClick={handleShowExif}>ℹ️</button>}
-              <button title={file.liked ? "Unlike" : "Like"} onClick={handleLikeClick} className="heart-button">
+              {file.type === 'image' && <button title="Show EXIF" aria-label="Show EXIF" onClick={handleShowExif}>ℹ️</button>}
+              <button title={file.liked ? "Unlike" : "Like"} aria-label={file.liked ? "Unlike" : "Like"} onClick={handleLikeClick} className="heart-button">
                 <HeartIcon liked={file.liked} size={20} />
               </button>
-              <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+              <button title="Delete" aria-label="Delete" onClick={handleDeleteClick}>🗑️</button>
               {/* ✅ Add Close button here */}
-              <button title="Close Viewer" onClick={handleCloseClick}>&times;</button>
+              <button title="Close Viewer" aria-label="Close Viewer" onClick={handleCloseClick}>&times;</button>
             </div>
           )}
           {/* Show controls again when EXIF is expanded */}
           {showExif && (
             <div className="viewer-controls">
-              {file.type === 'image' && <button title="Hide EXIF" onClick={handleShowExif}>ℹ️</button>}
-              <button title={file.liked ? "Unlike" : "Like"} onClick={handleLikeClick} className="heart-button">
+              {file.type === 'image' && <button title="Hide EXIF" aria-label="Hide EXIF" onClick={handleShowExif}>ℹ️</button>}
+              <button title={file.liked ? "Unlike" : "Like"} aria-label={file.liked ? "Unlike" : "Like"} onClick={handleLikeClick} className="heart-button">
                 <HeartIcon liked={file.liked} size={20} />
               </button>
-              <button title="Delete" onClick={handleDeleteClick}>🗑️</button>
+              <button title="Delete" aria-label="Delete" onClick={handleDeleteClick}>🗑️</button>
               {/* ✅ Add Close button here too */}
-              <button title="Close Viewer" onClick={handleCloseClick}>&times;</button>
+              <button title="Close Viewer" aria-label="Close Viewer" onClick={handleCloseClick}>&times;</button>
             </div>
           )}
         </div>
