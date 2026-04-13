@@ -346,6 +346,13 @@ body.no-scroll {
 .gallery-item:hover .image-dimension-overlay { opacity: 1; }
 .gallery-item:hover .lazy-image-placeholder img { opacity: 0.8; }
 
+.gallery-item:focus-visible {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 2px;
+  border-radius: 4px;
+  z-index: 10;
+}
+
 .media-type-overlay {
   position: absolute;
   top: 50%;
