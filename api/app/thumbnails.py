@@ -54,7 +54,7 @@ def create_video_thumb(src, dst):
     try:
         logger.info(f"Creating video thumbnail for: {src}")
         subprocess.run(
-            ["ffmpeg", "-y", "-i", src, "-ss", "00:00:01.000", "-vframes", "1", dst],
+            ["ffmpeg", "-y", "-i", src, "-ss", "00:00:01.000", "-vframes", "1", "-strict", "unofficial", dst],
             check=True, capture_output=True, text=True
         )
         logger.info(f"Successfully saved video thumbnail to: {dst}")
