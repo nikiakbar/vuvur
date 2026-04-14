@@ -54,7 +54,7 @@ jobs:
       - name: Build and push ${{ matrix.service }} image
         id: build_push
         if: steps.set_suffix.outputs.tag_suffix != ''
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
