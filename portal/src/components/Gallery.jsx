@@ -29,6 +29,15 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
             key={file.path + index}
             className="gallery-item"
             onClick={() => onImageClick(index)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onImageClick(index);
+              }
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label={`View ${file.type}${file.filename ? `: ${file.filename}` : ''}`}
           >
             <LazyImage
               src={`/api/thumbnails/${file.id}`}
