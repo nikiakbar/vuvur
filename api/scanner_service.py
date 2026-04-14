@@ -9,11 +9,30 @@ import time
 from app.scanner import scan, precompute_missing_thumbnails
 from app.db import init_db
 
+import logging
+from logging.handlers import RotatingFileHandler
+
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+log_dir = "/app/data/logs"
+os.makedirs(log_dir, exist_ok=True)
+
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+root_logger.addHandler(console_handler)
+
+# File handler
+file_handler = RotatingFileHandler(
+    os.path.join(log_dir, "scanner.log"),
+    maxBytes=10*1024*1024, # 10MB
+    backupCount=5
 )
+file_handler.setFormatter(log_formatter)
+root_logger.addHandler(file_handler)
 
 logger = logging.getLogger(__name__)
 

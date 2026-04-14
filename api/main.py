@@ -16,10 +16,34 @@ def create_app():
         DATABASE=os.path.join(app.instance_path, "vuvur.sqlite"),
     )
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    from logging.handlers import RotatingFileHandler
+    
+    # Configure logging
+    log_dir = "/app/data/logs"
+    os.makedirs(log_dir, exist_ok=True)
+    
+    log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    root_logger = logging.getLogger()
+    
+    # Clear existing handlers to avoid duplicates
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
+        
+    root_logger.setLevel(logging.INFO)
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_formatter)
+    root_logger.addHandler(console_handler)
+
+    # File handler
+    file_handler = RotatingFileHandler(
+        os.path.join(log_dir, "api.log"),
+        maxBytes=10*1024*1024, # 10MB
+        backupCount=5
     )
+    file_handler.setFormatter(log_formatter)
+    root_logger.addHandler(file_handler)
     
     # Ensure the instance and data folders exist
     try:

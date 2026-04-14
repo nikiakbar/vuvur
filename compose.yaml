@@ -23,6 +23,7 @@ services:
     volumes:
       # Core requirements - shared data volume for database
       - vuvur_local_dev:/app/data
+      - /var/log/vuvur:/app/data/logs
 
       # Required, for liked and recyclebin feature.
       - /mnt/z/Locals/system/outputs/liked:/mnt/gallery/liked
