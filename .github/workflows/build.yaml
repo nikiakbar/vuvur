@@ -67,8 +67,8 @@ jobs:
       - name: Trigger Portainer Webhook
         run: |
           if [ "${{ github.ref_name }}" == "main" ]; then
-            curl -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/8cdf026f-039a-4f00-8f47-ae265894183a
-            curl -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/9d55a564-0c92-4168-8c70-fd0b1d224850
+            curl -f -i -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/8cdf026f-039a-4f00-8f47-ae265894183a
+            curl -f -i -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/9d55a564-0c92-4168-8c70-fd0b1d224850
           else
-            curl -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/ff8a1840-dea6-4664-8bed-662cfec09d8c
+            curl -f -i -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/ff8a1840-dea6-4664-8bed-662cfec09d8c
           fi
