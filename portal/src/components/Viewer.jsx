@@ -18,10 +18,18 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
          if (onDelete && files && files.length > currentIndex && currentIndex >= 0) {
              const fileToDelete = files[currentIndex];
              if (fileToDelete && fileToDelete.id) {
-                 console.log(`Delete key pressed for file ID: ${fileToDelete.id}`); // Optional: Add log
                  onDelete(fileToDelete.id);
              }
          }
+      }
+      // Add 'l' key listener for like
+      if (e.key === 'l' || e.key === 'L') {
+        if (onLike && files && files.length > currentIndex && currentIndex >= 0) {
+            const fileToLike = files[currentIndex];
+            if (fileToLike && fileToLike.id) {
+                onLike(fileToLike.id);
+            }
+        }
       }
     };
 
