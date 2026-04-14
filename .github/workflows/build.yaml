@@ -60,6 +60,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
+          cache-from: type=gha,scope=${{ github.workflow }}-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}-${{ matrix.service }}
 
   deploy:
     needs: build-and-push
