@@ -58,7 +58,20 @@ def create_video_thumb(src, dst):
             ["ffmpeg", "-y", "-i", src, "-ss", "00:00:01.000", "-vframes", "1", "-strict", "unofficial", dst],
             check=True, capture_output=True, text=True
         )
-        logger.info(f"Successfully saved video thumbnail to: {dst}")
+        
+        # Fallback for short videos if 1s target failed to create file
+        if not os.path.exists(dst):
+             logger.info(f"Thumbnail at 1s failed (likely short video), trying at 0s for: {src}")
+             subprocess.run(
+                 ["ffmpeg", "-y", "-i", src, "-ss", "00:00:00.000", "-vframes", "1", "-strict", "unofficial", dst],
+                 check=True, capture_output=True, text=True
+             )
+
+        if os.path.exists(dst):
+            logger.info(f"Successfully saved video thumbnail to: {dst}")
+        else:
+            logger.warning(f"ffmpeg completed but no file created for {src}. Creating error placeholder.")
+            create_error_thumb(dst)
     except subprocess.CalledProcessError as e:
         logger.error(f"ffmpeg failed for {src}: {e.stderr}")
         logger.info(f"Creating fallback error thumbnail for {src}")
