@@ -15,6 +15,7 @@ function Header({ currentTheme, toggleTheme }) {
     <header className="app-header">
       <Link to="/" className="logo-link">
         <svg className="logo-svg" viewBox="0 0 100 80" width="40" height="40">
+            <title>Vuvur Logo</title>
             <rect width="100" height="80" rx="8" fill="var(--logo-bg)"/>
             <rect x="15" y="15" width="70" height="50" fill="var(--logo-accent)" />
             <circle cx="35" cy="35" r="10" fill="var(--logo-bg)" />
@@ -31,7 +32,13 @@ function Header({ currentTheme, toggleTheme }) {
           Search
         </button>
         <div className="menu-container">
-          <button className="hamburger-button" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          <button
+            className="hamburger-button"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label="Menu"
+            aria-expanded={isMenuOpen}
+            aria-haspopup="true"
+          >
             ☰
           </button>
           {isMenuOpen && (

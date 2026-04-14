@@ -343,8 +343,10 @@ body.no-scroll {
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
-.gallery-item:hover .image-dimension-overlay { opacity: 1; }
-.gallery-item:hover .lazy-image-placeholder img { opacity: 0.8; }
+.gallery-item:hover .image-dimension-overlay,
+.gallery-item:focus-visible .image-dimension-overlay { opacity: 1; }
+.gallery-item:hover .lazy-image-placeholder img,
+.gallery-item:focus-visible .lazy-image-placeholder img { opacity: 0.8; }
 
 .gallery-item:focus-visible {
   outline: 3px solid var(--accent-color);
