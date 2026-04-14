@@ -65,10 +65,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Portainer Webhook
+        env:
+          CF_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
+          if [ -z "$CF_CLIENT_ID" ] || [ -z "$CF_CLIENT_SECRET" ]; then
+            echo "Error: Cloudflare Access Secrets are not set or are empty!"
+            exit 1
+          fi
+
           if [ "${{ github.ref_name }}" == "main" ]; then
-            curl -f -i -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/8cdf026f-039a-4f00-8f47-ae265894183a
-            curl -f -i -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/9d55a564-0c92-4168-8c70-fd0b1d224850
+            curl -f -i -X POST -H "CF-Access-Client-Id: $CF_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" https://portainer.nixy.vip/api/stacks/webhooks/8cdf026f-039a-4f00-8f47-ae265894183a
+            curl -f -i -X POST -H "CF-Access-Client-Id: $CF_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" https://portainer.nixy.vip/api/stacks/webhooks/9d55a564-0c92-4168-8c70-fd0b1d224850
           else
-            curl -f -i -X POST -H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}" -H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}" https://portainer.nixy.vip/api/stacks/webhooks/ff8a1840-dea6-4664-8bed-662cfec09d8c
+            curl -f -i -X POST -H "CF-Access-Client-Id: $CF_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" https://portainer.nixy.vip/api/stacks/webhooks/ff8a1840-dea6-4664-8bed-662cfec09d8c
           fi
