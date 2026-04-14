@@ -124,7 +124,8 @@ def scan(limit=None):
     c = conn.cursor()
 
     logger.info("Fetching existing media from database...")
-    db_media = {row["path"]: dict(row) for row in c.execute("SELECT * FROM media")}
+    # Fetch only needed columns to drastically reduce memory usage
+    db_media = {row["path"]: {"size": row["size"], "mtime": row["mtime"]} for row in c.execute("SELECT path, size, mtime FROM media")}
     db_paths = set(db_media.keys())
     logger.info(f"Database contains {len(db_paths)} records.")
 
@@ -133,7 +134,7 @@ def scan(limit=None):
     files_to_process = []
     # all_disk_paths is used for deletion logic. 
     # If limit is set, we will NOT perform deletion, so we don't strictly need to track everything found if we exit early.
-    all_disk_paths = [] 
+    all_disk_paths = set() 
     
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}
     
@@ -149,7 +150,7 @@ def scan(limit=None):
         for fname in files:
             if os.path.splitext(fname)[1].lower() in valid_extensions:
                 full_path = os.path.join(root, fname)
-                all_disk_paths.append(full_path)
+                all_disk_paths.add(full_path)
                 
                 # Check if needs processing
                 needs_processing = False
@@ -183,7 +184,7 @@ def scan(limit=None):
         # If nothing to process AND (limit reached OR no diff in counts implying no deletions needed?)
         # Actually safer to just check if we have nothing to process and limit was set.
         # If limit was NOT set, we still might need to delete.
-        if limit is not None or not (db_paths - set(all_disk_paths)):
+        if limit is not None or not (db_paths - all_disk_paths):
              logger.info("No new/modified files and no deletions pending. Scan complete.")
              conn.close()
              return
@@ -192,17 +193,7 @@ def scan(limit=None):
     files_to_add = []
     files_to_update = []
     
-    # ... (process_file_metadata function remains same, but locally defined) ...
-    # We need to redefine or pass dependencies if we moved this logic. 
     # Refactoring slightly to keep it clean.
-    
-    def process_file_metadata_wrapper(path):
-        return process_file_metadata(path)
-
-    # Note: process_file_metadata calls get_metadata which is global. 
-    # But wait, the original code had process_file_metadata nested or global? 
-    # It was nested. I need to keep it nested or make it global. 
-    # I will keep the original implementation style if possible or define it here.
     
     def process_wrapper(path):
         # Re-implementing the inner logic or calling a helper. 
@@ -265,7 +256,7 @@ def scan(limit=None):
     if limit is not None:
         logger.info("Scan limit active. Skipping deletion phase to prevent data loss on partial scan.")
     else:
-        paths_to_delete = db_paths - set(all_disk_paths)
+        paths_to_delete = db_paths - all_disk_paths
         if paths_to_delete:
             logger.info(f"Removing {len(paths_to_delete)} deleted files...")
             c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
@@ -303,30 +294,30 @@ def precompute_missing_thumbnails(batch_size=50):
         
         # Query media, ordered by ID DESC to prioritize new files
         c.execute("SELECT id, path, type FROM media ORDER BY id DESC")
-        rows = c.fetchall()
+        
+        missing_items = []
+        for row in c:
+            mid = row['id']
+            src = row['path']
+            ftype = row['type']
+            
+            is_gif = src.lower().endswith(".gif")
+            thumb_ext = ".gif" if is_gif else ".jpg"
+            dst = os.path.join(THUMB_DIR, f"{mid}{thumb_ext}")
+            
+            # Audio and Video thumbs are always .jpg
+            if ftype in ("audio", "video"):
+                dst = os.path.join(THUMB_DIR, f"{mid}.jpg")
+
+            if not os.path.exists(dst):
+                missing_items.append((dict(row), dst))
+                if len(missing_items) >= batch_size:
+                    break
+                    
         conn.close()
     except Exception as e:
         logger.error(f"Database error while fetching media for thumbnails: {e}")
         return False
-
-    missing_items = []
-    for row in rows:
-        mid = row['id']
-        src = row['path']
-        ftype = row['type']
-        
-        is_gif = src.lower().endswith(".gif")
-        thumb_ext = ".gif" if is_gif else ".jpg"
-        dst = os.path.join(THUMB_DIR, f"{mid}{thumb_ext}")
-        
-        # Audio and Video thumbs are always .jpg
-        if ftype in ("audio", "video"):
-            dst = os.path.join(THUMB_DIR, f"{mid}.jpg")
-
-        if not os.path.exists(dst):
-            missing_items.append((row, dst))
-            if len(missing_items) >= batch_size:
-                break
                 
     if not missing_items:
         return False
