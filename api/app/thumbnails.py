@@ -47,7 +47,8 @@ def create_image_version(src, dst, size, quality):
         logger.info(f"Successfully saved image version to: {dst}")
     except Exception as e:
         logger.error(f"Failed to create image version for {src}: {e}", exc_info=True)
-        raise
+        logger.info(f"Creating fallback error thumbnail for {src}")
+        create_error_thumb(dst)
 
 def create_video_thumb(src, dst):
     """Creates a thumbnail for a video file."""
@@ -60,8 +61,23 @@ def create_video_thumb(src, dst):
         logger.info(f"Successfully saved video thumbnail to: {dst}")
     except subprocess.CalledProcessError as e:
         logger.error(f"ffmpeg failed for {src}: {e.stderr}")
-        raise
+        logger.info(f"Creating fallback error thumbnail for {src}")
+        create_error_thumb(dst)
 
+def create_error_thumb(dst):
+    """Creates a placeholder thumbnail for corrupted or unreadable files."""
+    try:
+        # Create a 600x600 dark red square
+        img = Image.new('RGB', (600, 600), color=(50, 0, 0))
+        d = ImageDraw.Draw(img)
+        # Draw a cross
+        d.line([(150, 150), (450, 450)], fill=(200, 50, 50), width=20)
+        d.line([(450, 150), (150, 450)], fill=(200, 50, 50), width=20)
+        output_format = "JPEG" if dst.lower().endswith(".jpg") else "GIF"
+        img.save(dst, output_format, quality=90) if output_format == "JPEG" else img.save(dst, output_format)
+        logger.info(f"Successfully saved error thumbnail to: {dst}")
+    except Exception as eval_e:
+        logger.error(f"Failed to create error thumbnail: {eval_e}", exc_info=True)
 def create_audio_thumb(dst):
     """Creates a placeholder thumbnail for audio files."""
     try:
