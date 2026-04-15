@@ -17,3 +17,11 @@
 ## 2026-04-09 - [Optimizing Random Selection and Caching]
 **Learning:** Using `ORDER BY RANDOM()` on large tables is slow because it sorts full rows in memory. The "Late Row Lookup" pattern (sorting IDs in a subquery and joining) significantly improves performance. Additionally, enabling browser caching for thumbnails and using `decoding="async"` for images reduces perceived latency and main-thread blocking.
 **Action:** Always use Late Row Lookup for random selection on tables with large blobs, and leverage browser-level optimizations for asset loading.
+
+## 2026-04-15 - [Composite Indexing for Sorted Filtering]
+**Learning:** While single-column indexes on `group_tag` and `mtime` are helpful, they don't prevent a "filesort" (temporary B-tree) when both are used together. A composite index `(group_tag, mtime DESC)` allows SQLite to perform both the filter and the sort using only the index, which is critical for smooth gallery performance.
+**Action:** Create composite indexes for the most common "filter + sort" combinations in the UI.
+
+## 2026-04-15 - [Ubiquitous Late Row Lookup]
+**Learning:** Extending the Late Row Lookup pattern from just `RANDOM()` to ALL sorted and paginated queries consistently reduces memory pressure. Since the gallery queries often fetch many records before applying `LIMIT`, keeping the sorted working set restricted to only IDs ensures that large EXIF JSON strings aren't loaded until the final page of results is ready.
+**Action:** Use Late Row Lookup for all paginated queries on tables with large columns, regardless of the sort order.
