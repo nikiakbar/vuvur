@@ -79,7 +79,12 @@ def init_db():
     # Reduces query time from O(N log N) to O(K) where K is the page size, assuming index usage.
     c.execute("CREATE INDEX IF NOT EXISTS idx_media_mtime ON media (mtime);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_media_filename ON media (filename);")
-    
+    # ⚡ Bolt: Added composite indexes to optimize grouped gallery views and subgroup discovery.
+    # idx_media_group_mtime eliminates temporary B-tree sorts when filtering by group.
+    # idx_media_group_path enables covering index scans for subgroup path discovery.
+    c.execute("CREATE INDEX IF NOT EXISTS idx_media_group_mtime ON media (group_tag, mtime DESC);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_media_group_path ON media (group_tag, path);")
+
     conn.commit()
     conn.close()
 
