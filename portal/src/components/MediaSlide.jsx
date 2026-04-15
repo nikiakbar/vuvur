@@ -52,7 +52,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
   useEffect(() => {
     if (videoRef.current && (file.type === 'video' || file.type === 'audio')) {
       if (index === currentIndex) {
-        videoRef.current.play().catch(error => { });
+        videoRef.current.play().catch(() => { });
       } else {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;

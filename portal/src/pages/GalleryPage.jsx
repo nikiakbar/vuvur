@@ -305,7 +305,7 @@ function GalleryPage() {
                 className={`quick-access-button ${selectedSubgroup === '' ? 'active' : ''}`}
                 onClick={() => handleSubgroupSelect('')}
               >
-                All '{selectedGroup}'
+                All &apos;{selectedGroup}&apos;
               </button>
               {subgroups.map(subgroupName => (
                 <button
