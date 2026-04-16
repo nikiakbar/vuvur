@@ -294,6 +294,37 @@ body.no-scroll {
   background-color: var(--accent-hover);
 }
 
+.header-action-button:focus-visible,
+.shuffle-button:focus-visible,
+.quick-access-button:focus-visible,
+.hamburger-button:focus-visible,
+.menu-item:focus-visible,
+.cleanup-button:focus-visible {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.header-action-button:active,
+.shuffle-button:active,
+.quick-access-button:active,
+.hamburger-button:active,
+.menu-item:active,
+.cleanup-button:active {
+  transform: scale(0.98);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- SCANNING PROGRESS --- */
 .scanning-container {
   display: flex;

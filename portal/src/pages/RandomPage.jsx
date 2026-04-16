@@ -106,6 +106,8 @@ function RandomPage({ preloadCount, zoomLevel }) { // Removed showFullSize
           >
             <MediaSlide
               file={file} 
+              index={index}
+              currentIndex={currentIndex}
               showControls={false} 
               // showFullSize prop removed
               zoomLevel={zoomLevel}

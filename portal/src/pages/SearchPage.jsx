@@ -20,7 +20,9 @@ function SearchPage() {
       <h2>Random Search</h2>
       <p>Find a single random media file where the filename or EXIF data matches your query.</p>
       <div className="search-controls">
+        <label htmlFor="search-input" className="visually-hidden">Search filename or EXIF</label>
         <input
+          id="search-input"
           type="text"
           className="filter-input"
           placeholder="e.g., 'artist_name' or 'landscape'..."
@@ -28,7 +30,11 @@ function SearchPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyPress={handleKeyPress}
         />
-        <button onClick={handleSearch} className="shuffle-button">
+        <button
+          onClick={handleSearch}
+          className="shuffle-button"
+          aria-label="Find random media"
+        >
           Find Random Media
         </button>
       </div>
