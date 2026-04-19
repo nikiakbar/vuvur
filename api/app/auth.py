@@ -10,9 +10,10 @@ ph = PasswordHasher()
 def register():
     if user_exists():
         return jsonify({"error": "Registration closed"}), 403
-    data = request.json
-    if not data.get("username") or not data.get("password"):
-        return jsonify({"error": "Missing fields"}), 400
+
+    data = request.get_json(silent=True)
+    if not data or not data.get("username") or not data.get("password"):
+        return jsonify({"error": "Missing fields or invalid JSON"}), 400
 
     # Hash the password with Argon2
     hashed_password = ph.hash(data["password"])
@@ -21,7 +22,10 @@ def register():
 
 @auth_bp.route("/api/login", methods=["POST"])
 def login():
-    data = request.json
+    data = request.get_json(silent=True)
+    if not data or not data.get("username") or not data.get("password"):
+        return jsonify({"error": "Missing fields or invalid JSON"}), 400
+
     if authenticate(data.get("username"), data.get("password")):
         session["user"] = data["username"]
         return jsonify({"message": "Logged in"})

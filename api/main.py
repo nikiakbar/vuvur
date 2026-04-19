@@ -11,8 +11,13 @@ def create_app():
     """Create and configure an instance of the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
     swagger = Swagger(app)
+
+    secret_key = os.environ.get("SECRET_KEY", "dev")
+    if secret_key == "dev":
+        logging.warning("SECRET_KEY is set to 'dev'. This is insecure for production!")
+
     app.config.from_mapping(
-        SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
+        SECRET_KEY=secret_key,
         DATABASE=os.path.join(app.instance_path, "vuvur.sqlite"),
     )
 
@@ -82,6 +87,15 @@ def create_app():
     app.register_blueprint(health.bp)
     app.register_blueprint(delete.bp)
     
+    @app.after_request
+    def add_security_headers(response):
+        """Inject security headers into every response."""
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        # Basic CSP: allow self, and data: for thumbnails/images
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:;"
+        return response
+
     logging.info("API workers ready (scanner runs in separate service)")
 
     return app
