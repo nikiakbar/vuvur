@@ -2,8 +2,10 @@ from flask import Blueprint, jsonify
 from app.scanner import scan
 import os
 import json
+import logging
 from app.api_key_middleware import api_key_required
 
+logger = logging.getLogger(__name__)
 scan_bp = Blueprint("scan", __name__)
 INITIAL_SCAN_FLAG_PATH = "/app/data/.initial_scan_complete"
 SCAN_STATUS_PATH = "/app/data/scan_status.json"
@@ -35,7 +37,8 @@ def trigger_scan():
         scan(limit=max_media)
         return jsonify({"status": "ok", "message": "Scan completed"}), 200
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logger.error(f"Error triggering scan: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred during the library scan."}), 500
 
 @scan_bp.route("/api/cache/cleanup", methods=["POST"])
 @api_key_required
@@ -60,4 +63,5 @@ def cleanup_cache():
             
         return jsonify({"message": "Library re-scan triggered successfully."}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error during cache cleanup: {e}", exc_info=True)
+        return jsonify({"error": "An error occurred while cleaning the cache and restarting the scan."}), 500
