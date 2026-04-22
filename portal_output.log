@@ -1,9 +1,33 @@
 
-> vuvur-frontend@0.0.0 dev
-> vite --port 5173 --host 0.0.0.0
+> vuvur-frontend@0.0.0 dev /app/portal
+> vite
 
 
-  VITE v5.4.21  ready in 325 ms
+  VITE v5.4.21  ready in 359 ms
 
   ➜  Local:   http://localhost:5173/
-  ➜  Network: http://192.168.0.2:5173/
+  ➜  Network: use --host to expose
+6:29:30 AM [vite] http proxy error: /api/scan/status
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+6:29:30 AM [vite] http proxy error: /api/scan/status
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+6:29:30 AM [vite] http proxy error: /api/gallery/groups
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+6:29:30 AM [vite] http proxy error: /api/gallery?sort=random&q=&page=1&limit=20&group=&subgroup=
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+6:30:51 AM [vite] http proxy error: /api/scan/status
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+6:30:51 AM [vite] http proxy error: /api/scan/status
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+6:30:51 AM [vite] http proxy error: /api/gallery/groups
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+6:30:51 AM [vite] http proxy error: /api/gallery?sort=random&q=&page=1&limit=20&group=&subgroup=
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)

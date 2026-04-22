@@ -1,11 +1,7 @@
---- Starting Gunicorn web server ---
-[2026-04-09 03:19:15 +0000] [115364] [INFO] Starting gunicorn 25.3.0
-[2026-04-09 03:19:15 +0000] [115364] [INFO] Listening at: http://0.0.0.0:5000 (115364)
-[2026-04-09 03:19:15 +0000] [115364] [INFO] Using worker: gevent
-[2026-04-09 03:19:15 +0000] [115482] [INFO] Booting worker with pid: 115482
-[2026-04-09 03:19:15 +0000] [115483] [INFO] Booting worker with pid: 115483
-[2026-04-09 03:19:15 +0000] [115364] [INFO] Control socket listening at /home/jules/.gunicorn/gunicorn.ctl
-2026-04-09 03:19:16,115 - root - INFO - Database initialized successfully
-2026-04-09 03:19:16,125 - root - INFO - Database initialized successfully
-2026-04-09 03:19:16,127 - root - INFO - API workers ready (scanner runs in separate service)
-2026-04-09 03:19:16,137 - root - INFO - API workers ready (scanner runs in separate service)
+[2026-04-22 06:32:52 +0000] [126812] [INFO] Starting gunicorn 25.3.0
+[2026-04-22 06:32:52 +0000] [126812] [INFO] Listening at: http://0.0.0.0:5000 (126812)
+[2026-04-22 06:32:52 +0000] [126812] [INFO] Using worker: gevent
+[2026-04-22 06:32:52 +0000] [127217] [INFO] Booting worker with pid: 127217
+[2026-04-22 06:32:52 +0000] [126812] [INFO] Control socket listening at /home/jules/.gunicorn/gunicorn.ctl
+2026-04-22 06:32:54,141 - root - INFO - Database initialized successfully
+2026-04-22 06:32:54,163 - root - INFO - API workers ready (scanner runs in separate service)

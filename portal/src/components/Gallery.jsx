@@ -2,7 +2,7 @@ import React from 'react';
 import LazyImage from './LazyImage';
 import Masonry from 'react-masonry-css';
 
-const Gallery = ({ files, onImageClick, lastImageRef }) => {
+const Gallery = React.memo(({ files, onImageClick, lastImageRef }) => {
 
   if (!files || files.length === 0) {
     return <p>No media found. Check your filters or wait for the scan to complete.</p>;
@@ -55,6 +55,8 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
       })}
     </Masonry>
   );
-};
+});
+
+Gallery.displayName = 'Gallery';
 
 export default Gallery;

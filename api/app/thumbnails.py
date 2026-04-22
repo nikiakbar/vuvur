@@ -21,6 +21,9 @@ def create_image_version(src, dst, size, quality):
         output_format = "JPEG" if dst.lower().endswith(".jpg") else "GIF"
         
         with Image.open(src) as im:
+            # ⚡ Bolt: Fast JPEG decoding using 'draft' mode
+            if output_format == "JPEG":
+                im.draft("RGB", size)
             # Handle animated GIFs - create a static thumbnail from the first frame
             if im.format == "GIF" and getattr(im, 'is_animated', False):
                  logger.info(f"Detected animated GIF: {src}. Creating static thumbnail.")
@@ -54,8 +57,9 @@ def create_video_thumb(src, dst):
     """Creates a thumbnail for a video file."""
     try:
         logger.info(f"Creating video thumbnail for: {src}")
+        # ⚡ Bolt: Added scaling filter to ffmpeg to reduce memory/bandwidth usage
         subprocess.run(
-            ["ffmpeg", "-y", "-i", src, "-ss", "00:00:01.000", "-vframes", "1", "-strict", "unofficial", dst],
+            ["ffmpeg", "-y", "-i", src, "-ss", "00:00:01.000", "-vframes", "1", "-vf", "scale='min(600,iw)':-1", "-strict", "unofficial", dst],
             check=True, capture_output=True, text=True
         )
         
@@ -63,7 +67,7 @@ def create_video_thumb(src, dst):
         if not os.path.exists(dst):
              logger.info(f"Thumbnail at 1s failed (likely short video), trying at 0s for: {src}")
              subprocess.run(
-                 ["ffmpeg", "-y", "-i", src, "-ss", "00:00:00.000", "-vframes", "1", "-strict", "unofficial", dst],
+                 ["ffmpeg", "-y", "-i", src, "-ss", "00:00:00.000", "-vframes", "1", "-vf", "scale='min(600,iw)':-1", "-strict", "unofficial", dst],
                  check=True, capture_output=True, text=True
              )
 
@@ -129,7 +133,16 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
-    row = get_media_row(mid)
+    # ⚡ Bolt: Fetch only necessary columns to avoid loading large EXIF blobs
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT path, type FROM media WHERE id=?", (mid,))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        abort(404)
+
     src = row["path"]
     
     # Determine thumbnail extension based on original file type

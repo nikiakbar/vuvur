@@ -25,3 +25,11 @@
 ## 2026-04-15 - [Ubiquitous Late Row Lookup]
 **Learning:** Extending the Late Row Lookup pattern from just `RANDOM()` to ALL sorted and paginated queries consistently reduces memory pressure. Since the gallery queries often fetch many records before applying `LIMIT`, keeping the sorted working set restricted to only IDs ensures that large EXIF JSON strings aren't loaded until the final page of results is ready.
 **Action:** Use Late Row Lookup for all paginated queries on tables with large columns, regardless of the sort order.
+
+## 2026-04-22 - [Global SQL PRAGMA Side Effects]
+**Learning:** Enabling `PRAGMA case_sensitive_like=ON` globally on a shared connection to optimize one specific query (path prefixing) is dangerous as it changes the behavior of all `LIKE` queries in the application, potentially breaking user-facing search features that expect case-insensitivity.
+**Action:** Use functional-only optimizations or specific query patterns (e.g., `BETWEEN`) for prefix matching if global settings cannot be safely changed.
+
+## 2026-04-22 - [Breaking Column Pruning in Utilities]
+**Learning:** Pruning columns in a widely-used utility function like `get_media_row` to improve performance of one endpoint can break other parts of the application that rely on the full record.
+**Action:** Perform specific column selection directly in the endpoint handlers or create dedicated, lean utility functions instead of modifying generic ones.

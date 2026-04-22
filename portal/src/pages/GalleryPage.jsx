@@ -233,7 +233,7 @@ function GalleryPage() {
     }
   };
 
-  const openViewer = (index) => setInitialIndex(index);
+  const openViewer = useCallback((index) => setInitialIndex(index), []);
   const closeViewer = () => setInitialIndex(null);
 
   // --- Filter Selection Handlers ---
