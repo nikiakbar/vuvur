@@ -4,6 +4,8 @@ from argon2 import PasswordHasher, exceptions
 
 DB_PATH = os.environ.get("DB_PATH", "/app/data/app.db")
 ph = PasswordHasher()
+# DUMMY_HASH used to mitigate timing attacks during authentication
+DUMMY_HASH = ph.hash("dummy_password")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -115,6 +117,11 @@ def authenticate(username, password):
     conn.close()
 
     if not row:
+        # ✅ Sentinel: Mitigate timing attacks/username enumeration by performing a dummy verification
+        try:
+            ph.verify(DUMMY_HASH, password)
+        except Exception:
+            pass
         return False
 
     try:
