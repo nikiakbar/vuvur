@@ -5,6 +5,7 @@ import logging
 from flask import Blueprint, jsonify, abort
 from app.db import get_db
 from app.api_key_middleware import api_key_required
+from app.auth_middleware import login_required
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("delete", __name__)
@@ -16,6 +17,7 @@ SECONDARY_MOUNT_PATH = os.environ.get("SECONDARY_MOUNT_PATH", None)
 
 @bp.route("/api/delete/<int:mid>", methods=["POST"])
 @api_key_required
+@login_required
 def delete_media_item(mid):
     """
     Moves a media file to the recycle bin, deletes its DB record,
