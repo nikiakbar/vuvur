@@ -112,7 +112,10 @@ def get_media_row(media_id):
     try:
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT * FROM media WHERE id=?", (media_id,))
+        # ⚡ Bolt: Explicitly select only the path and type columns.
+        # Fetching the full row (including the large EXIF JSON blob) for every thumbnail
+        # request is wasteful and slows down the gallery significantly.
+        c.execute("SELECT path, type FROM media WHERE id=?", (media_id,))
         row = c.fetchone()
         if not row:
             logger.warning(f"Media ID not found: {media_id}")
@@ -129,6 +132,7 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
+    # ⚡ Bolt: Use optimized helper to fetch only necessary metadata.
     row = get_media_row(mid)
     src = row["path"]
     
