@@ -9,6 +9,9 @@ from PIL import Image, ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
 
+# Suppress DecompressionBombWarning and allow massive AI grids (e.g. 167+ megapixel PNGs)
+Image.MAX_IMAGE_PIXELS = None
+
 logger = logging.getLogger(__name__)
 bp = Blueprint("thumbnails", __name__)
 
@@ -40,6 +43,11 @@ def create_image_version(src, dst, size, quality):
                             first_frame.save(dst, format="GIF")
             else:
                 # Handle non-animated images (including static GIFs)
+                # ⚡ Bolt: Massive memory optimization for huge JPEGs
+                # This instructs libjpeg to decode the image at a lower resolution natively,
+                # saving gigabytes of RAM when processing extremely large images.
+                if im.format in ("JPEG", "MPO"):
+                    im.draft('RGB', size)
                 im.thumbnail(size)
                 # Ensure image is in a saveable format (convert images with transparency to RGB for JPEG)
                 save_kwargs = {}
