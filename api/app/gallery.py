@@ -3,12 +3,12 @@ import os # Import os
 from flask import Blueprint, jsonify, request
 from app.db import get_db
 import json
-from app.api_key_middleware import api_key_required
+from app.auth_middleware import login_required
 
 bp = Blueprint("gallery", __name__)
 GALLERY_PATH = "/mnt/gallery" # Ensure this matches scanner.py
 @bp.route("/api/gallery")
-@api_key_required
+@login_required
 def gallery():
     """
     Get a paginated list of media items with sorting, searching, and group/subgroup filtering.

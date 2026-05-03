@@ -3,14 +3,14 @@ from app.scanner import scan
 import os
 import json
 import logging
-from app.api_key_middleware import api_key_required
+from app.auth_middleware import login_required
 
 logger = logging.getLogger(__name__)
 scan_bp = Blueprint("scan", __name__)
 INITIAL_SCAN_FLAG_PATH = "/app/data/.initial_scan_complete"
 SCAN_STATUS_PATH = "/app/data/scan_status.json"
 @scan_bp.route("/api/scan/status", methods=["GET"])
-@api_key_required
+@login_required
 def scan_status():
     """Checks the status of the library scan."""
     is_complete = os.path.exists(INITIAL_SCAN_FLAG_PATH)
@@ -29,7 +29,7 @@ def scan_status():
     })
 
 @scan_bp.route("/api/scan", methods=["POST"])
-@api_key_required
+@login_required
 def trigger_scan():
     """Triggers a library scan."""
     try:
@@ -41,7 +41,7 @@ def trigger_scan():
         return jsonify({"status": "error", "message": "An error occurred during the library scan."}), 500
 
 @scan_bp.route("/api/cache/cleanup", methods=["POST"])
-@api_key_required
+@login_required
 def cleanup_cache():
     """Triggers a library re-scan."""
     try:
