@@ -1,131 +1,135 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MediaSlide from './MediaSlide';
 
 const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const scrollContainerRef = useRef(null);
-  const slideRefs = useRef([]);
-  const isScrollingRef = useRef(true);
+
+  // Preload adjacent images
+  useEffect(() => {
+    const nextIndex = Math.min(currentIndex + 1, files.length - 1);
+    const prevIndex = Math.max(currentIndex - 1, 0);
+    
+    // Simple image preloader
+    const preload = (index) => {
+      if (files[index] && files[index].type === 'image') {
+        const img = new Image();
+        img.src = `/api/stream/${files[index].id}`;
+      }
+    };
+    
+    preload(nextIndex);
+    preload(prevIndex);
+  }, [currentIndex, files]);
 
   // Effect to handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         onClose();
+        return;
       }
-      // Add 'd' key listener for delete
+      
+      // Navigation
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        setCurrentIndex(prev => Math.min(prev + 1, files.length - 1));
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setCurrentIndex(prev => Math.max(prev - 1, 0));
+      }
+
+      // Actions
       if (e.key === 'd' || e.key === 'D') {
-         // Check if onDelete function exists and files array is valid
          if (onDelete && files && files.length > currentIndex && currentIndex >= 0) {
-             const fileToDelete = files[currentIndex];
-             if (fileToDelete && fileToDelete.id) {
-                 onDelete(fileToDelete.id);
-             }
+             onDelete(files[currentIndex].id);
          }
       }
-      // Add 'l' key listener for like
       if (e.key === 'l' || e.key === 'L') {
         if (onLike && files && files.length > currentIndex && currentIndex >= 0) {
-            const fileToLike = files[currentIndex];
-            if (fileToLike && fileToLike.id) {
-                onLike(fileToLike.id);
-            }
+            onLike(files[currentIndex].id);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    // Cleanup function to remove listener
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, onDelete, files, currentIndex]); // Added dependencies
+  }, [onClose, onDelete, onLike, files, currentIndex]); 
 
-
-  // Effect to scroll to the initial index when opened
-  useLayoutEffect(() => {
-    if (!scrollContainerRef.current) return;
+  // Touch handling for swiping
+  const touchStartY = useRef(0);
+  
+  const handleTouchStart = (e) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+  
+  const handleTouchEnd = (e) => {
+    const touchEndY = e.changedTouches[0].clientY;
+    const diff = touchStartY.current - touchEndY;
     
-    isScrollingRef.current = true;
-    // Disable snapping temporarily to prevent the browser from fighting the programmatic scroll
-    scrollContainerRef.current.style.scrollSnapType = 'none';
-    
-    const containerHeight = scrollContainerRef.current.clientHeight;
-    scrollContainerRef.current.scrollTop = initialIndex * containerHeight;
-    
-    if (slideRefs.current[initialIndex]) {
-      slideRefs.current[initialIndex].scrollIntoView({ block: 'start', behavior: 'auto' });
+    // Swipe up -> next image
+    if (diff > 50) {
+      setCurrentIndex(prev => Math.min(prev + 1, files.length - 1));
+    } 
+    // Swipe down -> prev image
+    else if (diff < -50) {
+      setCurrentIndex(prev => Math.max(prev - 1, 0));
     }
+  };
 
-    const timer = setTimeout(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.style.scrollSnapType = ''; // Restore CSS default
-      }
-      isScrollingRef.current = false;
-    }, 100);
+  // Mouse wheel handling
+  const isWheeling = useRef(false);
+  const handleWheel = (e) => {
+    if (isWheeling.current) return;
     
-    return () => clearTimeout(timer);
-  }, [initialIndex]); // Only run when initialIndex changes
-
-  // Effect to observe which slide is currently visible
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting && !isScrollingRef.current) {
-          const index = parseInt(entry.target.dataset.index, 10);
-          if (!isNaN(index) && index !== currentIndex) { // Only update if index actually changes
-            setCurrentIndex(index);
-          }
-        }
-      });
-    }, { root: container, threshold: 0.7 }); // Trigger when 70% visible
-
-    const refs = slideRefs.current;
-    refs.forEach((ref) => { if (ref) observer.observe(ref) });
-
-    // Cleanup observer
-    return () => { refs.forEach((ref) => { if (ref) observer.unobserve(ref) }) };
-  }, [files, currentIndex]);
+    // Only trigger on significant scroll delta
+    if (Math.abs(e.deltaY) > 20) {
+      isWheeling.current = true;
+      if (e.deltaY > 0) {
+        setCurrentIndex(prev => Math.min(prev + 1, files.length - 1));
+      } else {
+        setCurrentIndex(prev => Math.max(prev - 1, 0));
+      }
+      
+      // Cooldown to prevent trackpad hyper-scrolling
+      setTimeout(() => {
+        isWheeling.current = false;
+      }, 500); 
+    }
+  };
 
   if (!files || files.length === 0) return null;
 
-  // ⚡ Bolt: Virtualization optimization.
-  // We only render the current slide and its immediate neighbors to reduce DOM size and React overhead.
-  // This prevents O(N) rendering where N is the number of items in the gallery.
-  // A buffer of 2 on each side ensures smooth scrolling while keeping component count minimal.
-  const VIRTUAL_BUFFER = 2;
+  const currentFile = files[currentIndex];
 
   return (
-    <div className="viewer-overlay" ref={scrollContainerRef}>
-      {/* The top-right close button is gone */}
-
-      {files.map((file, index) => {
-        const isVisible = Math.abs(index - currentIndex) <= VIRTUAL_BUFFER || index === initialIndex;
-
-        return (
-          // We MUST keep the wrapper div rendered to maintain the scroll height and snapping points.
-          <div 
-            key={file.id || file.path || index} 
-            ref={(el) => (slideRefs.current[index] = el)} 
-            data-index={index}
-            style={{ flex: '0 0 100%', width: '100%', scrollSnapAlign: 'start' }}
-          >
-            {isVisible && (
-              <MediaSlide
-                file={file}
-                index={index}
-                currentIndex={currentIndex} // Pass current index to MediaSlide
-                onLike={() => onLike(file.id)}
-                onDelete={() => onDelete(file.id)} // Pass direct delete handler for button
-                onClose={onClose} // Pass onClose down to MediaSlide
-                showControls={true}
-                zoomLevel={zoomLevel || 2.5}
-              />
-            )}
-          </div>
-        );
-      })}
+    <div 
+      className="viewer-overlay" 
+      style={{ overflow: 'hidden' }} // Force disable all native scrolling
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onWheel={handleWheel}
+    >
+      <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
+        <MediaSlide
+          key={currentFile.id || currentIndex} // Force re-render on change
+          file={currentFile}
+          index={currentIndex}
+          currentIndex={currentIndex}
+          onLike={() => onLike(currentFile.id)}
+          onDelete={() => onDelete(currentFile.id)} 
+          onClose={onClose} 
+          showControls={true}
+          zoomLevel={zoomLevel || 2.5}
+        />
+      </div>
+      
+      {/* Navigation Indicators */}
+      <div className="viewer-nav-indicator top" onClick={() => setCurrentIndex(prev => Math.max(prev - 1, 0))}>
+        {currentIndex > 0 && <span className="arrow up-arrow">▲</span>}
+      </div>
+      <div className="viewer-nav-indicator bottom" onClick={() => setCurrentIndex(prev => Math.min(prev + 1, files.length - 1))}>
+        {currentIndex < files.length - 1 && <span className="arrow down-arrow">▼</span>}
+      </div>
     </div>
   );
 };
