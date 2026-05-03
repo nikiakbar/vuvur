@@ -1,34 +1,20 @@
-name: Build and Push Docker Images
+name: Build and Push Portal
 
 on:
   push:
     branches: [ "main", "dev" ]
     paths:
-      - 'api/**'
       - 'portal/**'
-      - '.github/workflows/build.yaml'
+      - '.github/workflows/build-portal.yaml'
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: build-portal-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        include:
-          - service: api
-            context: ./api
-            dockerfile: ./api/Dockerfile
-            tag_name: api
-          - service: portal
-            context: ./portal
-            dockerfile: ./portal/Dockerfile
-            tag_name: portal
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -51,20 +37,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build and push ${{ matrix.service }} image
+      - name: Build and push Portal image
         id: build_push
         if: steps.set_suffix.outputs.tag_suffix != ''
         uses: docker/build-push-action@v7
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
+          context: ./portal
+          file: ./portal/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:${{ matrix.tag_name }}-${{ steps.set_suffix.outputs.tag_suffix }}
-          cache-from: type=gha,scope=${{ github.workflow }}-${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ github.workflow }}-${{ matrix.service }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:portal-${{ steps.set_suffix.outputs.tag_suffix }}
+          cache-from: type=gha,scope=${{ github.workflow }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}
 
   deploy:
-    needs: build-and-push
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Portainer Webhook
@@ -88,7 +74,7 @@ jobs:
         if: always()
         run: |
           status="${{ job.status }}"
-          title="Vuvur Deploy: $status"
+          title="Vuvur Portal Deploy: $status"
           message="Workflow: ${{ github.workflow }}\nBranch: ${{ github.ref_name }}\nStatus: $status"
           
           curl -H "Title: $title" \
