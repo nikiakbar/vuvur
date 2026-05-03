@@ -1,0 +1,83 @@
+name: Build and Push API
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+    paths:
+      - 'api/**'
+      - '.github/workflows/build-api.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: build-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set image tag suffix
+        id: set_suffix
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "tag_suffix=main" >> $GITHUB_OUTPUT
+          else
+            echo "tag_suffix=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PAT }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push API image
+        id: build_push
+        if: steps.set_suffix.outputs.tag_suffix != ''
+        uses: docker/build-push-action@v7
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vuvur:api-${{ steps.set_suffix.outputs.tag_suffix }}
+          cache-from: type=gha,scope=${{ github.workflow }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Portainer Webhook
+        env:
+          CF_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          if [ -z "$CF_CLIENT_ID" ] || [ -z "$CF_CLIENT_SECRET" ]; then
+            echo "Error: Cloudflare Access Secrets are not set or are empty!"
+            exit 1
+          fi
+
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            curl -f -i -X POST -H "CF-Access-Client-Id: $CF_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" https://portainer.nixy.vip/api/stacks/webhooks/8cdf026f-039a-4f00-8f47-ae265894183a
+            curl -f -i -X POST -H "CF-Access-Client-Id: $CF_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" https://portainer.nixy.vip/api/stacks/webhooks/9d55a564-0c92-4168-8c70-fd0b1d224850
+          else
+            curl -f -i -X POST -H "CF-Access-Client-Id: $CF_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" https://portainer.nixy.vip/api/stacks/webhooks/ff8a1840-dea6-4664-8bed-662cfec09d8c
+          fi
+
+      - name: Send ntfy notification
+        if: always()
+        run: |
+          status="${{ job.status }}"
+          title="Vuvur API Deploy: $status"
+          message="Workflow: ${{ github.workflow }}\nBranch: ${{ github.ref_name }}\nStatus: $status"
+          
+          curl -H "Title: $title" \
+               -H "Priority: default" \
+               -d "$message" \
+               https://ntfy.sh/nixyops
