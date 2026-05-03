@@ -235,33 +235,61 @@ def scan(limit=None):
         
         # <--- Cap max_workers to 4 to prevent 32 concurrent processes eating memory
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-            results = executor.map(process_wrapper, files_to_process)
-            for data in results:
-                processed_count += 1
-                if data is None: continue
-                    
-                if data['path'] not in db_paths:
-                    files_to_add.append(tuple(data.values()))
-                else:
-                    update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
-                    files_to_update.append(update_data)
+            # We use a set of futures with a "sliding window" to keep RAM usage low.
+            # This prevents creating thousands of Future objects at once.
+            MAX_WINDOW = 1000
+            file_iter = iter(files_to_process)
+            futures = set()
+
+            # Initial submission seed
+            for _ in range(min(len(files_to_process), MAX_WINDOW)):
+                path = next(file_iter)
+                futures.add(executor.submit(process_wrapper, path))
+
+            while futures:
+                # Wait for the first task to finish
+                done, futures = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
                 
-                # --- NEW BATCH COMMIT LOGIC ---
-                if len(files_to_add) >= BATCH_SIZE:
-                    logger.info(f"Batch inserting {len(files_to_add)} files...")
-                    c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
-                    conn.commit()
-                    files_to_add.clear() # <--- FREE RAM
+                for future in done:
+                    try:
+                        data = future.result()
+                    except Exception as e:
+                        logger.error(f"Worker generated exception: {e}")
+                        data = None
+
+                    processed_count += 1
                     
-                if len(files_to_update) >= BATCH_SIZE:
-                    logger.info(f"Batch updating {len(files_to_update)} files...")
-                    c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
-                    conn.commit()
-                    files_to_update.clear() # <--- FREE RAM
-                
-                if processed_count % 50 == 0:
-                    logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
-                    update_scan_status(processed_count, len(files_to_process))
+                    # Refill the window as tasks finish
+                    try:
+                        next_path = next(file_iter)
+                        futures.add(executor.submit(process_wrapper, next_path))
+                    except StopIteration:
+                        pass
+
+                    if data is None: continue
+                        
+                    if data['path'] not in db_paths:
+                        files_to_add.append(tuple(data.values()))
+                    else:
+                        update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
+                        files_to_update.append(update_data)
+                    
+                    # --- NEW BATCH COMMIT LOGIC ---
+                    if len(files_to_add) >= BATCH_SIZE:
+                        logger.info(f"Batch inserting {len(files_to_add)} files...")
+                        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
+                        conn.commit()
+                        files_to_add.clear() # <--- FREE RAM
+                        
+                    if len(files_to_update) >= BATCH_SIZE:
+                        logger.info(f"Batch updating {len(files_to_update)} files...")
+                        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
+                        conn.commit()
+                        files_to_update.clear() # <--- FREE RAM
+                    
+                    if processed_count % 50 == 0:
+                        logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
+                        update_scan_status(processed_count, len(files_to_process))
                     
         update_scan_status(len(files_to_process), len(files_to_process))
 
