@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import MediaSlide from './MediaSlide';
 
 const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) => {
@@ -40,13 +40,11 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
 
 
   // Effect to scroll to the initial index when opened
-  useEffect(() => {
-     // Delay scrolling slightly to ensure layout is complete
-     const timer = setTimeout(() => {
-        // ✅ Changed behavior from 'smooth' to 'auto' for an instant jump
-        slideRefs.current[initialIndex]?.scrollIntoView({ block: 'center', behavior: 'auto' });
-     }, 100); // 100ms delay
-     return () => clearTimeout(timer); // Cleanup timer
+  useLayoutEffect(() => {
+    if (scrollContainerRef.current) {
+      const containerHeight = scrollContainerRef.current.clientHeight;
+      scrollContainerRef.current.scrollTop = initialIndex * containerHeight;
+    }
   }, [initialIndex]); // Only run when initialIndex changes
 
   // Effect to observe which slide is currently visible
@@ -89,9 +87,13 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
         const isVisible = Math.abs(index - currentIndex) <= VIRTUAL_BUFFER || index === initialIndex;
 
         return (
-          // Ensure each slide div has a unique key and the data-index attribute
           // We MUST keep the wrapper div rendered to maintain the scroll height and snapping points.
-          <div key={file.id || file.path || index} ref={(el) => (slideRefs.current[index] = el)} data-index={index}>
+          <div 
+            key={file.id || file.path || index} 
+            ref={(el) => (slideRefs.current[index] = el)} 
+            data-index={index}
+            style={{ height: '100%', width: '100%', scrollSnapAlign: 'start', flexShrink: 0 }}
+          >
             {isVisible && (
               <MediaSlide
                 file={file}

@@ -434,8 +434,7 @@ body.no-scroll {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .viewer-slide {
-  height: 100vh; width: 100%;
-  scroll-snap-align: start;
+  height: 100%; width: 100%;
   display: flex; justify-content: center; align-items: center;
   position: relative; box-sizing: border-box;
 }
