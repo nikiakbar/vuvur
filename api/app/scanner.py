@@ -144,38 +144,50 @@ def scan(limit=None):
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}
     
     limit_reached = False
+    stack = [GALLERY_PATH]
     
-    for root, _, files in os.walk(GALLERY_PATH):
-        if limit_reached:
-            break
-            
-        if RECYCLEBIN_PATH in root:
+    while stack and not limit_reached:
+        current_dir = stack.pop()
+        
+        # Skip recycle bin
+        if RECYCLEBIN_PATH in current_dir:
             continue
             
-        for fname in files:
-            if os.path.splitext(fname)[1].lower() in valid_extensions:
-                full_path = os.path.join(root, fname)
-                all_disk_paths.add(full_path)
-                
-                # Check if needs processing
-                needs_processing = False
-                try:
-                    stat = os.stat(full_path)
-                    if full_path not in db_paths:
-                        needs_processing = True
-                    elif db_media[full_path]["size"] != stat.st_size or \
-                         db_media[full_path]["mtime"] != stat.st_mtime:
-                        needs_processing = True
-                except FileNotFoundError:
-                    continue # File disappeared, skip
-
-                if needs_processing:
-                    files_to_process.append(full_path)
-                    
-                    if limit is not None and len(files_to_process) >= limit:
-                        logger.info(f"Scan limit of {limit} reached during discovery. Stopping file walk.")
-                        limit_reached = True
+        try:
+            with os.scandir(current_dir) as it:
+                for entry in it:
+                    if limit_reached:
                         break
+                        
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(entry.path)
+                    elif entry.is_file(follow_symlinks=False):
+                        ext = os.path.splitext(entry.name)[1].lower()
+                        if ext in valid_extensions:
+                            full_path = entry.path
+                            all_disk_paths.add(full_path)
+                            
+                            needs_processing = False
+                            try:
+                                # entry.stat() is cached on Windows during scandir, making it very fast
+                                stat = entry.stat()
+                                if full_path not in db_paths:
+                                    needs_processing = True
+                                elif db_media[full_path]["size"] != stat.st_size or \
+                                     db_media[full_path]["mtime"] != stat.st_mtime:
+                                    needs_processing = True
+                            except (FileNotFoundError, OSError):
+                                continue # File disappeared or other error, skip
+
+                            if needs_processing:
+                                files_to_process.append(full_path)
+                                if limit is not None and len(files_to_process) >= limit:
+                                    logger.info(f"Scan limit of {limit} reached during discovery. Stopping scan.")
+                                    limit_reached = True
+                                    break
+        except (PermissionError, OSError) as e:
+            logger.warning(f"Could not scan directory {current_dir}: {e}")
+            continue
 
     total_files_found = len(all_disk_paths)
     if limit_reached:
