@@ -13,8 +13,9 @@ function Header({ currentTheme, toggleTheme }) {
 
   return (
     <header className="app-header">
-      <Link to="/" className="logo-link">
+      <Link to="/" className="logo-link" aria-label="Home">
         <svg className="logo-svg" viewBox="0 0 100 80" width="40" height="40">
+            <title>Vuvur Logo</title>
             <rect width="100" height="80" rx="8" fill="var(--logo-bg)"/>
             <rect x="15" y="15" width="70" height="50" fill="var(--logo-accent)" />
             <circle cx="35" cy="35" r="10" fill="var(--logo-bg)" />
@@ -24,14 +25,24 @@ function Header({ currentTheme, toggleTheme }) {
       </Link>
       
       <div className="header-actions">
-        <Link to="/random-scroller" className="header-action-button">
+        <Link to="/random-scroller" className="header-action-button" aria-label="View random media">
           Random
         </Link>
-        <button onClick={handleSearchClick} className="header-action-button secondary">
+        <button
+          onClick={handleSearchClick}
+          className="header-action-button secondary"
+          aria-label="Go to search"
+        >
           Search
         </button>
         <div className="menu-container">
-          <button className="hamburger-button" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          <button
+            className="hamburger-button"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label="Menu"
+            aria-expanded={isMenuOpen}
+            aria-haspopup="true"
+          >
             ☰
           </button>
           {isMenuOpen && (

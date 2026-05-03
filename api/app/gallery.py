@@ -61,30 +61,38 @@ def gallery():
     total_items = total_row["cnt"] if total_row else 0
     total_pages = (total_items + limit - 1) // limit if limit > 0 else 1
 
-    # ⚡ Bolt: Late Row Lookup optimization for random sorting.
-    # Sorting IDs in a subquery is much faster than sorting full rows with EXIF blobs.
+    # ⚡ Bolt: Late Row Lookup optimization for all sorted queries.
+    # Sorting and paginating only IDs in a subquery prevents loading large EXIF blobs into memory
+    # for all records being sorted, significantly reducing memory pressure and improving latency.
+    # The composite indexes added in db.py (e.g., idx_media_group_mtime) ensure these subqueries
+    # can be satisfied without temporary B-trees or full table scans.
+    order_by_sql = ""
     if sort == "random":
-        sql = f"SELECT m.* FROM media m JOIN (SELECT media.id {base_sql} {join_sql} {where_sql} ORDER BY RANDOM() LIMIT ? OFFSET ?) as t ON m.id = t.id"
-        params.extend([limit, offset])
-        c.execute(sql, tuple(params))
+        order_by_sql = "ORDER BY RANDOM()"
     elif sort == "date_desc":
-        sql += " ORDER BY mtime DESC"
+        order_by_sql = "ORDER BY mtime DESC"
     elif sort == "date_asc":
-        sql += " ORDER BY mtime ASC"
+        order_by_sql = "ORDER BY mtime ASC"
     elif sort == "file_asc":
-        sql += " ORDER BY filename ASC"
+        order_by_sql = "ORDER BY filename ASC"
     elif sort == "file_desc":
-        sql += " ORDER BY filename DESC"
+        order_by_sql = "ORDER BY filename DESC"
     # If no sort specified and no query, default to something reasonable (e.g., date descending)
     elif not sort and not query:
-         sql += " ORDER BY mtime DESC"
+        order_by_sql = "ORDER BY mtime DESC"
 
-
-    if sort != "random":
-        # Add pagination
-        sql += " LIMIT ? OFFSET ?"
-        params.extend([limit, offset])
-        c.execute(sql, tuple(params))
+    # Use Late Row Lookup for all sorted/paginated queries
+    sql = f"""
+        SELECT m.* FROM media m
+        JOIN (
+            SELECT media.id {base_sql} {join_sql} {where_sql}
+            {order_by_sql}
+            LIMIT ? OFFSET ?
+        ) as t ON m.id = t.id
+        {order_by_sql}
+    """
+    params.extend([limit, offset])
+    c.execute(sql, tuple(params))
 
     # Decode the exif string into a dictionary
     items = []

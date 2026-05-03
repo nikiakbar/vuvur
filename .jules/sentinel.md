@@ -7,3 +7,8 @@
 **Vulnerability:** API keys were compared using standard equality (`==`), which is susceptible to timing attacks.
 **Learning:** Standard string comparison returns as soon as a mismatch is found, allowing an attacker to brute-force a key by measuring how long the server takes to respond.
 **Prevention:** Use `secrets.compare_digest()` for constant-time comparison of secrets and API keys.
+
+## 2026-04-19 - Information Leakage via Raw Exception Strings
+**Vulnerability:** API endpoints were returning raw exception messages (`str(e)`) to the client, exposing internal implementation details.
+**Learning:** Using `str(e)` in a production API response is a shortcut that often leaks sensitive information about the environment, database schema, or code structure.
+**Prevention:** Always catch exceptions, log the detailed error server-side (using `logger.error(..., exc_info=True)`), and return a generic, non-descriptive error message to the client.
