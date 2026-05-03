@@ -48,6 +48,29 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
   const DRAG_THRESHOLD = 10;
 
   const [showExif, setShowExif] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideTimerRef = useRef(null);
+
+  const resetControlsVisibility = () => {
+    setControlsVisible(true);
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+    if (!showExif) {
+      hideTimerRef.current = setTimeout(() => {
+        setControlsVisible(false);
+      }, 3000);
+    }
+  };
+
+  useEffect(() => {
+    if (index === currentIndex) {
+      resetControlsVisibility();
+    }
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [index, currentIndex, showExif]);
 
   useEffect(() => {
     if (videoRef.current && (file.type === 'video' || file.type === 'audio')) {
@@ -157,7 +180,11 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
 
 
   return (
-    <div className="viewer-slide">
+    <div 
+      className="viewer-slide"
+      onMouseMove={resetControlsVisibility}
+      onTouchStart={resetControlsVisibility}
+    >
       <div
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
         onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
@@ -208,7 +235,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
 
       {showControls && index === currentIndex && (
         <div
-          className={`slide-info ${showExif ? 'expanded' : ''}`}
+          className={`slide-info ${showExif ? 'expanded' : ''} ${!controlsVisible ? 'hidden' : ''}`}
           ref={slideInfoRef}
           onClick={handleInfoBarClick}
         >
