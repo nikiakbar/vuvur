@@ -41,72 +41,77 @@ def extract_exif_data(image_path):
     """
     Extracts metadata from an image, with specific, robust handling for the
     UserComment encoding from AUTOMATIC1111 Stable Diffusion generations.
+    Returns (exif_json, user_comment, width, height).
     """
     try:
         # Check if it's a GIF early, as Pillow's EXIF handling for GIF is limited
         ext = os.path.splitext(image_path)[1].lower()
         if ext == '.gif':
-            return None, None # GIFs generally don't have standard EXIF
+            return None, None, None, None # GIFs generally don't have standard EXIF
 
-        img = Image.open(image_path)
-        user_comment = None
-        exif_json = None
-        all_tags = {}
+        with Image.open(image_path) as img:
+            width, height = img.size
+            user_comment = None
+            exif_json = None
+            all_tags = {}
 
-        # For PNG files, the prompt is stored directly in the info dictionary
-        if "parameters" in img.info:
-            user_comment = img.info["parameters"]
-            all_tags["parameters"] = user_comment
-            exif_json = json.dumps(all_tags, default=str)
-            return exif_json, user_comment
+            # For PNG files, the prompt is stored directly in the info dictionary
+            if "parameters" in img.info:
+                user_comment = img.info["parameters"]
+                all_tags["parameters"] = user_comment
+                exif_json = json.dumps(all_tags, default=str)
+                return exif_json, user_comment, width, height
 
-        # For JPEG/WebP, parse the raw EXIF data using piexif
-        if "exif" in img.info:
-            try:
-                exif_dict = piexif.load(img.info["exif"])
-                if "Exif" in exif_dict and piexif.ExifIFD.UserComment in exif_dict["Exif"]:
-                    comment_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
-                    
-                    # ✅ THIS IS THE DEFINITIVE FIX:
-                    # Manually clean the byte string to remove encoding headers and null bytes.
-                    
-                    # 1. Find the start of the actual text (skip headers like UNICODE, ASCII, etc.)
-                    try:
-                        # Look for common patterns indicating start of text
-                        if comment_bytes.startswith(b'UNICODE\x00'):
-                             text_start = 8
-                        elif comment_bytes.startswith(b'ASCII\x00\x00\x00'):
-                             text_start = 8
-                        elif b'\x00\x00' in comment_bytes[8:]:
-                             text_start = comment_bytes.index(b'\x00\x00', 8) + 2
-                        else:
-                             text_start = 0 # Fallback if no header found
-                    except ValueError:
-                        text_start = 8 # Fallback for slightly different formats
+            # For JPEG/WebP, parse the raw EXIF data using piexif
+            if "exif" in img.info:
+                try:
+                    exif_dict = piexif.load(img.info["exif"])
+                    if "Exif" in exif_dict and piexif.ExifIFD.UserComment in exif_dict["Exif"]:
+                        comment_bytes = exif_dict["Exif"][piexif.ExifIFD.UserComment]
+                        
+                        # ✅ THIS IS THE DEFINITIVE FIX:
+                        # Manually clean the byte string to remove encoding headers and null bytes.
+                        
+                        # 1. Find the start of the actual text (skip headers like UNICODE, ASCII, etc.)
+                        try:
+                            # Look for common patterns indicating start of text
+                            if comment_bytes.startswith(b'UNICODE\x00'):
+                                 text_start = 8
+                            elif comment_bytes.startswith(b'ASCII\x00\x00\x00'):
+                                 text_start = 8
+                            elif b'\x00\x00' in comment_bytes[8:]:
+                                 text_start = comment_bytes.index(b'\x00\x00', 8) + 2
+                            else:
+                                 text_start = 0 # Fallback if no header found
+                        except ValueError:
+                            text_start = 8 # Fallback for slightly different formats
 
-                    # 2. Get the raw text bytes
-                    raw_text_bytes = comment_bytes[text_start:]
-                    
-                    # 3. Filter out the interspersed null bytes common in some encodings
-                    cleaned_bytes = bytes([b for b in raw_text_bytes if b != 0])
-                    
-                    # 4. Decode the clean byte string
-                    user_comment = cleaned_bytes.decode('utf-8', errors='ignore').strip()
+                        # 2. Get the raw text bytes
+                        raw_text_bytes = comment_bytes[text_start:]
+                        
+                        # 3. Filter out the interspersed null bytes common in some encodings
+                        cleaned_bytes = bytes([b for b in raw_text_bytes if b != 0])
+                        
+                        # 4. Decode the clean byte string
+                        user_comment = cleaned_bytes.decode('utf-8', errors='ignore').strip()
 
-                    all_tags["UserComment"] = user_comment
-                    # Only save if we actually got a comment
-                    if user_comment:
-                         exif_json = json.dumps(all_tags, default=str)
+                        all_tags["UserComment"] = user_comment
+                        # Only save if we actually got a comment
+                        if user_comment:
+                             exif_json = json.dumps(all_tags, default=str)
 
-                return exif_json, user_comment
+                    return exif_json, user_comment, width, height
 
-            except Exception as e:
-                logger.warning(f"Piexif failed for {image_path}: {e}")
+                except Exception as e:
+                    logger.warning(f"Piexif failed for {image_path}: {e}")
+                    return None, None, width, height
+
+            return None, None, width, height
 
     except Exception as e:
         logger.error(f"Failed to extract metadata from {image_path}: {e}")
 
-    return None, None
+    return None, None, None, None
 
 
 def update_scan_status(progress, total):
@@ -226,7 +231,10 @@ def scan(limit=None):
     if files_to_process:
         logger.info(f"Starting metadata extraction for {len(files_to_process)} files...")
         processed_count = 0
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        BATCH_SIZE = 500  # <--- Batch size limit to flush RAM
+        
+        # <--- Cap max_workers to 4 to prevent 32 concurrent processes eating memory
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             results = executor.map(process_wrapper, files_to_process)
             for data in results:
                 processed_count += 1
@@ -238,20 +246,33 @@ def scan(limit=None):
                     update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
                     files_to_update.append(update_data)
                 
+                # --- NEW BATCH COMMIT LOGIC ---
+                if len(files_to_add) >= BATCH_SIZE:
+                    logger.info(f"Batch inserting {len(files_to_add)} files...")
+                    c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
+                    conn.commit()
+                    files_to_add.clear() # <--- FREE RAM
+                    
+                if len(files_to_update) >= BATCH_SIZE:
+                    logger.info(f"Batch updating {len(files_to_update)} files...")
+                    c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
+                    conn.commit()
+                    files_to_update.clear() # <--- FREE RAM
+                
                 if processed_count % 50 == 0:
                     logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
                     update_scan_status(processed_count, len(files_to_process))
                     
         update_scan_status(len(files_to_process), len(files_to_process))
 
+    # Catch any remaining items after the loop finishes
     if files_to_add:
-        logger.info(f"Adding {len(files_to_add)} new files...")
+        logger.info(f"Adding final {len(files_to_add)} new files...")
         c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
 
     if files_to_update:
-        logger.info(f"Updating {len(files_to_update)} existing files...")
+        logger.info(f"Updating final {len(files_to_update)} existing files...")
         c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
-
     # Deletion Logic
     if limit is not None:
         logger.info("Scan limit active. Skipping deletion phase to prevent data loss on partial scan.")
@@ -271,12 +292,7 @@ def get_metadata(path, ftype):
     """Helper function to get all metadata for a file."""
     user_comment, width, height, exif = None, None, None, None
     if ftype == "image":
-        exif, user_comment = extract_exif_data(path)
-        try:
-            with Image.open(path) as img:
-                width, height = img.size
-        except Exception as e:
-            logger.error(f"Could not get image dimensions for {path}: {e}")
+        exif, user_comment, width, height = extract_exif_data(path)
     elif ftype == 'video':
         width, height = get_video_dimensions(path)
     # Audio files just return None for everything
@@ -347,4 +363,4 @@ def precompute_missing_thumbnails(batch_size=50):
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         list(executor.map(process_thumb, missing_items))
         
-    return True
+    return True
