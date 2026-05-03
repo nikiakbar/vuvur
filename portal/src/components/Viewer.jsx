@@ -5,6 +5,7 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const scrollContainerRef = useRef(null);
   const slideRefs = useRef([]);
+  const isScrollingRef = useRef(true);
 
   // Effect to handle keyboard shortcuts
   useEffect(() => {
@@ -41,10 +42,27 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
 
   // Effect to scroll to the initial index when opened
   useLayoutEffect(() => {
-    if (scrollContainerRef.current) {
-      const containerHeight = scrollContainerRef.current.clientHeight;
-      scrollContainerRef.current.scrollTop = initialIndex * containerHeight;
+    if (!scrollContainerRef.current) return;
+    
+    isScrollingRef.current = true;
+    // Disable snapping temporarily to prevent the browser from fighting the programmatic scroll
+    scrollContainerRef.current.style.scrollSnapType = 'none';
+    
+    const containerHeight = scrollContainerRef.current.clientHeight;
+    scrollContainerRef.current.scrollTop = initialIndex * containerHeight;
+    
+    if (slideRefs.current[initialIndex]) {
+      slideRefs.current[initialIndex].scrollIntoView({ block: 'start', behavior: 'auto' });
     }
+
+    const timer = setTimeout(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.style.scrollSnapType = ''; // Restore CSS default
+      }
+      isScrollingRef.current = false;
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [initialIndex]); // Only run when initialIndex changes
 
   // Effect to observe which slide is currently visible
@@ -54,10 +72,9 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
 
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
-        if (entry.isIntersecting) {
+        if (entry.isIntersecting && !isScrollingRef.current) {
           const index = parseInt(entry.target.dataset.index, 10);
           if (!isNaN(index) && index !== currentIndex) { // Only update if index actually changes
-             console.log("Setting current index to:", index); // Optional log
             setCurrentIndex(index);
           }
         }
