@@ -109,7 +109,7 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
             key={file.id || file.path || index} 
             ref={(el) => (slideRefs.current[index] = el)} 
             data-index={index}
-            style={{ height: '100%', width: '100%', scrollSnapAlign: 'start', flexShrink: 0 }}
+            style={{ flex: '0 0 100%', width: '100%', scrollSnapAlign: 'start' }}
           >
             {isVisible && (
               <MediaSlide
