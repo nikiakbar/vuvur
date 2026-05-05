@@ -340,6 +340,88 @@ def get_metadata(path, ftype):
     # Audio files just return None for everything
     return width, height, user_comment, exif
 
+
+def process_single_file(path):
+    """
+    Upserts a single media file into the database.
+    Used by both the bulk scanner and the real-time watchdog watcher.
+    Returns True on success, False on failure.
+    """
+    try:
+        ext = os.path.splitext(path)[1].lower()
+        if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
+            ftype = "image"
+        elif ext in {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}:
+            ftype = "audio"
+        else:
+            ftype = "video"
+
+        stat = os.stat(path)
+        width, height, user_comment, exif = get_metadata(path, ftype)
+
+        rel_path = os.path.relpath(path, GALLERY_PATH)
+        group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
+
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            c = conn.cursor()
+            c.execute("SELECT id FROM media WHERE path=?", (path,))
+            existing = c.fetchone()
+            if existing:
+                c.execute(
+                    "UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?",
+                    (stat.st_size, stat.st_mtime, user_comment, width, height, exif, group_tag, path)
+                )
+                logger.info(f"Updated media record for: {path}")
+            else:
+                filename = os.path.basename(path)
+                c.execute(
+                    "INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (path, filename, ftype, stat.st_size, stat.st_mtime, user_comment, width, height, exif, group_tag)
+                )
+                logger.info(f"Inserted new media record for: {path}")
+            conn.commit()
+        finally:
+            conn.close()
+        return True
+    except FileNotFoundError:
+        logger.warning(f"File disappeared before processing: {path}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to process file {path}: {e}", exc_info=True)
+        return False
+
+
+def delete_single_file(path):
+    """
+    Removes a media record (and its thumbnail) from the database.
+    Used by the real-time watchdog watcher when a file deletion is detected.
+    """
+    from app.thumbnails import THUMB_DIR
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            c = conn.cursor()
+            c.execute("SELECT id FROM media WHERE path=?", (path,))
+            row = c.fetchone()
+            if row:
+                media_id = row[0]
+                c.execute("DELETE FROM media WHERE path=?", (path,))
+                conn.commit()
+                logger.info(f"Deleted media record for: {path} (id={media_id})")
+                # Clean up associated thumbnail(s)
+                for ext in (".jpg", ".gif"):
+                    thumb_path = os.path.join(THUMB_DIR, f"{media_id}{ext}")
+                    if os.path.exists(thumb_path):
+                        os.remove(thumb_path)
+                        logger.info(f"Deleted thumbnail: {thumb_path}")
+            else:
+                logger.debug(f"Delete event for unknown path (not in DB): {path}")
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error(f"Failed to delete record for {path}: {e}", exc_info=True)
+
 def precompute_missing_thumbnails(batch_size=50):
     """
     Finds missing thumbnails in the background and generates them.
