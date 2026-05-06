@@ -154,11 +154,11 @@ def thumb(mid):
     # ⚡ Bolt: Fast-path for cached thumbnails to bypass DB query.
     # Check for existing .jpg or .gif thumbnails before hitting the database.
     # This reduces DB load and latency for the most common "repeat" requests.
-    # Using os.path.basename to satisfy CodeQL path sanitization requirements.
-    safe_mid = os.path.basename(str(mid))
+    # We use os.path.abspath to ensure the resulting path is within THUMB_DIR.
+    base_thumb_dir = os.path.abspath(THUMB_DIR)
     for ext, mime in [(".jpg", "image/jpeg"), (".gif", "image/gif")]:
-        dst_check = os.path.join(THUMB_DIR, f"{safe_mid}{ext}")
-        if os.path.exists(dst_check):
+        dst_check = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}{ext}"))
+        if dst_check.startswith(base_thumb_dir) and os.path.exists(dst_check):
             return send_file(dst_check, mimetype=mime, max_age=31536000)
 
     row = get_media_row(mid)
@@ -166,7 +166,9 @@ def thumb(mid):
     
     is_gif = src.lower().endswith(".gif")
     thumb_ext = ".gif" if is_gif else ".jpg"
-    dst = os.path.join(THUMB_DIR, f"{safe_mid}{thumb_ext}")
+    dst = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}{thumb_ext}"))
+    if not dst.startswith(base_thumb_dir):
+        abort(400) # Safety check for path traversal
     mime_type = "image/gif" if is_gif else "image/jpeg"
 
     # 1. If the thumbnail exists, serve it instantly (Happy Path)
@@ -194,12 +196,14 @@ def thumb(mid):
         if row["type"] == "image":
              create_image_version(src, dst, size=(600, 600), quality=90)
         elif row["type"] == "audio":
-             dst_jpg = os.path.join(THUMB_DIR, f"{safe_mid}.jpg")
+             dst_jpg = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}.jpg"))
+             if not dst_jpg.startswith(base_thumb_dir): abort(400)
              create_audio_thumb(dst_jpg)
              dst = dst_jpg
              mime_type = "image/jpeg"
         else: 
-             dst_jpg = os.path.join(THUMB_DIR, f"{safe_mid}.jpg")
+             dst_jpg = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}.jpg"))
+             if not dst_jpg.startswith(base_thumb_dir): abort(400)
              create_video_thumb(src, dst_jpg)
              dst = dst_jpg
              mime_type = "image/jpeg"
