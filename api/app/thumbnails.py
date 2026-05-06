@@ -131,7 +131,8 @@ def get_media_row(media_id):
     try:
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT * FROM media WHERE id=?", (media_id,))
+        # ⚡ Bolt: Select only necessary columns to avoid loading large EXIF blobs.
+        c.execute("SELECT path, type FROM media WHERE id=?", (media_id,))
         row = c.fetchone()
         if not row:
             logger.warning(f"Media ID not found: {media_id}")
@@ -150,6 +151,14 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
+    # ⚡ Bolt: Fast-path for cached thumbnails to bypass DB query.
+    # Check for existing .jpg or .gif thumbnails before hitting the database.
+    # This reduces DB load and latency for the most common "repeat" requests.
+    for ext, mime in [(".jpg", "image/jpeg"), (".gif", "image/gif")]:
+        dst_check = os.path.join(THUMB_DIR, f"{mid}{ext}")
+        if os.path.exists(dst_check):
+            return send_file(dst_check, mimetype=mime, max_age=31536000)
+
     row = get_media_row(mid)
     src = row["path"]
     
@@ -159,6 +168,8 @@ def thumb(mid):
     mime_type = "image/gif" if is_gif else "image/jpeg"
 
     # 1. If the thumbnail exists, serve it instantly (Happy Path)
+    # This check remains as a fallback or in case of race conditions,
+    # although the loop above should catch most cases.
     if os.path.exists(dst):
         return send_file(dst, mimetype=mime_type, max_age=31536000)
 
