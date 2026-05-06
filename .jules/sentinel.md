@@ -12,3 +12,13 @@
 **Vulnerability:** API endpoints were returning raw exception messages (`str(e)`) to the client, exposing internal implementation details.
 **Learning:** Using `str(e)` in a production API response is a shortcut that often leaks sensitive information about the environment, database schema, or code structure.
 **Prevention:** Always catch exceptions, log the detailed error server-side (using `logger.error(..., exc_info=True)`), and return a generic, non-descriptive error message to the client.
+
+## 2026-05-03 - Consolidated Dual-Method Authentication
+**Vulnerability:** Inconsistent and redundant authentication decorators ( and ) were causing conflicts and leaving several sensitive endpoints unprotected if  was enabled but  was not.
+**Learning:** Having multiple, overlapping security decorators can lead to developer confusion and "Swiss cheese" security where some endpoints are accidentally left unprotected. Consolidating into a single, robust decorator ensures consistent application of security policy.
+**Prevention:** Use a single, unified  decorator that handles all valid authentication methods (sessions and API keys) and apply it systematically to all sensitive routes.
+
+## 2026-05-03 - Consolidated Dual-Method Authentication
+**Vulnerability:** Inconsistent and redundant authentication decorators (api_key_required and login_required) were causing conflicts and leaving several sensitive endpoints unprotected if ENABLE_LOGIN was enabled but API_SECRET_KEY was not.
+**Learning:** Having multiple, overlapping security decorators can lead to developer confusion and "Swiss cheese" security where some endpoints are accidentally left unprotected. Consolidating into a single, robust decorator ensures consistent application of security policy.
+**Prevention:** Use a single, unified login_required decorator that handles all valid authentication methods (sessions and API keys) and apply it systematically to all sensitive routes.
