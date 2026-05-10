@@ -6,7 +6,8 @@ Runs independently from API workers to avoid lock contention and timeouts.
 import logging
 import os
 import time
-from app.scanner import scan, precompute_missing_thumbnails
+from app.scanner import scan, precompute_missing_thumbnails, GALLERY_PATH
+from app.watcher import start_watcher
 from app.db import init_db
 
 import logging
@@ -52,7 +53,8 @@ def main():
     init_db()
     
     # Get configuration from environment
-    scan_interval = int(os.getenv("SCAN_INTERVAL", 3600))
+    # Default to 6 hours (21600s) for safety scan if not specified
+    scan_interval = int(os.getenv("SCAN_INTERVAL", 21600))
     initial_scan_max = int(os.getenv("INITIAL_SCAN_MAX_MEDIA", 5000))
     
     # --- INITIAL SCAN ---
@@ -69,37 +71,47 @@ def main():
     else:
         logger.info("Initial scan already completed (flag file exists).")
     
-    # --- PERIODIC SCANNING ---
-    if scan_interval == 0:
-        logger.info("SCAN_INTERVAL is 0. Periodic scanning disabled. Exiting.")
-        return
+    # --- START WATCHER ---
+    logger.info("Initializing real-time file watcher...")
+    observer, queue = start_watcher(GALLERY_PATH)
     
-    logger.info(f"Starting periodic scan loop (interval: {scan_interval}s)...")
-    while True:
-        # Utilize the scan_interval window to precompute thumbnails
-        start_wait = time.time()
-        while time.time() - start_wait < scan_interval:
+    # --- PERIODIC SAFETY SCANNING & THUMBNAIL PRECOMPUTATION ---
+    logger.info(f"Starting main service loop (Safety scan interval: {scan_interval}s)...")
+    try:
+        while True:
+            # Utilize the scan_interval window to precompute thumbnails
+            start_wait = time.time()
+            while time.time() - start_wait < scan_interval:
+                try:
+                    processed_any = precompute_missing_thumbnails(batch_size=50)
+                    if processed_any:
+                        # Very small sleep to yield CPU between batches
+                        time.sleep(1)
+                        continue
+                    else:
+                        # Caught up, sleep until next check or interval ends
+                        remaining = scan_interval - (time.time() - start_wait)
+                        if remaining > 0:
+                            time.sleep(min(remaining, 60))
+                except Exception as e:
+                    logger.error(f"Error during thumbnail precomputation: {e}", exc_info=True)
+                    time.sleep(60) # Prevent tight error loops
+                    
             try:
-                processed_any = precompute_missing_thumbnails(batch_size=50)
-                if processed_any:
-                    # Very small sleep to yield CPU between batches
-                    time.sleep(1)
-                    continue
-                else:
-                    # Caught up, sleep until next check or interval ends
-                    remaining = scan_interval - (time.time() - start_wait)
-                    if remaining > 0:
-                        time.sleep(min(remaining, 60))
+                logger.info("Starting periodic safety scan (no limit)...")
+                scan(limit=None)
+                logger.info("Periodic safety scan completed.")
             except Exception as e:
-                logger.error(f"Error during thumbnail precomputation: {e}", exc_info=True)
-                time.sleep(60) # Prevent tight error loops
-                
-        try:
-            logger.info("Starting periodic scan (no limit)...")
-            scan(limit=None)
-            logger.info("Periodic scan completed.")
-        except Exception as e:
-            logger.error(f"Error during periodic scan: {e}", exc_info=True)
+                logger.error(f"Error during periodic scan: {e}", exc_info=True)
+    except KeyboardInterrupt:
+        logger.info("Scanner service stopping...")
+        observer.stop()
+    except Exception as e:
+        logger.error(f"Fatal error in main loop: {e}", exc_info=True)
+        observer.stop()
+    
+    observer.join()
+    queue.stop()
 
 if __name__ == "__main__":
     main()

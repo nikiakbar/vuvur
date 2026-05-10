@@ -474,11 +474,12 @@ body.no-scroll {
   top: 50%;
   right: 15px;
   transform: translateY(-50%);
-  background-color: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  padding: 15px 10px;
-  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 10px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
   text-align: center;
   width: auto;
   max-height: 90vh;
