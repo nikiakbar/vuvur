@@ -3,7 +3,7 @@ import io
 import subprocess
 import logging
 import threading
-from flask import Blueprint, send_file, abort
+from flask import Blueprint, send_file, abort, send_from_directory
 from werkzeug.exceptions import HTTPException
 from PIL import Image, ImageDraw
 from app.db import get_db
@@ -154,14 +154,11 @@ def thumb(mid):
     # ⚡ Bolt: High-performance "Fast Path".
     # Check filesystem for existing thumbnails BEFORE hitting the database.
     # This reduces latency for cached thumbnails and eliminates DB load for hot assets.
-    abs_thumb_dir = os.path.abspath(THUMB_DIR)
-    for ext, mime in [(".jpg", "image/jpeg"), (".gif", "image/gif")]:
-        dst = os.path.join(THUMB_DIR, f"{mid}{ext}")
-        # Security: Resolve and verify path to satisfy CodeQL.
-        # Using os.path.commonpath to prevent partial path traversal attacks.
-        abs_dst = os.path.abspath(dst)
-        if os.path.commonpath([abs_dst, abs_thumb_dir]) == abs_thumb_dir and os.path.exists(abs_dst):
-            return send_file(abs_dst, mimetype=mime, max_age=31536000)
+    for ext in [".jpg", ".gif"]:
+        filename = f"{mid}{ext}"
+        # Security: Use send_from_directory to safely serve files and satisfy CodeQL
+        if os.path.isfile(os.path.join(THUMB_DIR, filename)):
+            return send_from_directory(THUMB_DIR, filename, max_age=31536000)
 
     row = get_media_row(mid)
     src = row["path"]
