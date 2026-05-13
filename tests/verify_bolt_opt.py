@@ -2,6 +2,7 @@ import sys
 import os
 import unittest
 from unittest.mock import patch, MagicMock
+from werkzeug.exceptions import NotFound
 
 # Add api directory to sys.path
 sys.path.append(os.path.join(os.getcwd(), 'api'))
@@ -17,16 +18,9 @@ class TestThumbnailOptimization(unittest.TestCase):
         self.client = self.app.test_client()
 
     @patch('app.thumbnails.get_media_row')
-    @patch('os.path.isfile')
     @patch('app.thumbnails.send_from_directory')
-    def test_thumb_fast_path(self, mock_send_from_dir, mock_isfile, mock_get_media_row):
-        # Setup mocks
-        def isfile_side_effect(p):
-             if '1.jpg' in p:
-                 return True
-             return False
-
-        mock_isfile.side_effect = isfile_side_effect
+    def test_thumb_fast_path(self, mock_send_from_dir, mock_get_media_row):
+        # Setup mocks: send_from_directory returns the file for ID 1
         mock_send_from_dir.return_value = 'mocked_file'
 
         with patch('app.api_key_middleware.API_SECRET', None):
@@ -37,13 +31,14 @@ class TestThumbnailOptimization(unittest.TestCase):
         mock_send_from_dir.assert_called_once()
 
     @patch('app.thumbnails.get_media_row')
-    @patch('os.path.isfile')
     @patch('os.path.exists')
     @patch('app.thumbnails.send_file')
     @patch('app.thumbnails.send_from_directory')
     @patch('app.thumbnails.GENERATION_SEMAPHORE')
-    def test_thumb_slow_path(self, mock_semaphore, mock_send_from_dir, mock_send_file, mock_exists, mock_isfile, mock_get_media_row):
-        mock_isfile.return_value = False
+    def test_thumb_slow_path(self, mock_semaphore, mock_send_from_dir, mock_send_file, mock_exists, mock_get_media_row):
+        # Simulation: send_from_directory raises NotFound for ID 2 (both .jpg and .gif)
+        mock_send_from_dir.side_effect = NotFound()
+
         mock_exists.side_effect = [
             True,  # src exists check
             True   # final exist check
@@ -57,6 +52,7 @@ class TestThumbnailOptimization(unittest.TestCase):
             with patch('app.thumbnails.create_image_version') as mock_create:
                 response = self.client.get('/api/thumbnails/2')
 
+        self.assertEqual(mock_send_from_dir.call_count, 2) # Once for .jpg, once for .gif
         mock_get_media_row.assert_called_once_with(2)
         mock_create.assert_called_once()
         self.assertEqual(response.status_code, 200)
