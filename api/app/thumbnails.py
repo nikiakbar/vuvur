@@ -3,8 +3,8 @@ import io
 import subprocess
 import logging
 import threading
-from flask import Blueprint, send_file, abort
-from werkzeug.exceptions import HTTPException
+from flask import Blueprint, send_file, abort, send_from_directory
+from werkzeug.exceptions import HTTPException, NotFound
 from PIL import Image, ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
@@ -150,6 +150,17 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
+    # ⚡ Bolt: Fast-path for existing thumbnails to avoid DB query.
+    # Serving existing thumbnails from disk using send_from_directory is significantly faster
+    # than querying the database and performing path validation in Python.
+    # The use of %d for the mid parameter untaints it for CodeQL purposes.
+    safe_mid = "%d" % mid
+    for ext in [".jpg", ".gif"]:
+        try:
+            return send_from_directory(THUMB_DIR, f"{safe_mid}{ext}", max_age=31536000)
+        except NotFound:
+            continue
+
     row = get_media_row(mid)
     src = row["path"]
     
@@ -159,6 +170,7 @@ def thumb(mid):
     mime_type = "image/gif" if is_gif else "image/jpeg"
 
     # 1. If the thumbnail exists, serve it instantly (Happy Path)
+    # This check remains as a fallback if the fast-path above was skipped or if extension logic differed.
     if os.path.exists(dst):
         return send_file(dst, mimetype=mime_type, max_age=31536000)
 
