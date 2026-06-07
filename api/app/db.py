@@ -5,6 +5,10 @@ from argon2 import PasswordHasher, exceptions
 DB_PATH = os.environ.get("DB_PATH", "/app/data/app.db")
 ph = PasswordHasher()
 
+# Dummy hash for timing-safe authentication when user is not found
+DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$VXOtvTe4r51h1rJnq1PO6A$HUNd0EVg4lTxWwuE5tGCvyP3Chcviu8OBtEeqJ3XF+o"
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -114,12 +118,13 @@ def authenticate(username, password):
     row = c.fetchone()
     conn.close()
 
-    if not row:
-        return False
+    # Use a dummy hash if the user is not found to prevent timing-based username enumeration.
+    # This ensures that password verification is always performed.
+    hash_to_verify = row["password"] if row else DUMMY_HASH
 
     try:
-        ph.verify(row["password"], password)
-        return True
+        ph.verify(hash_to_verify, password)
+        return row is not None
     except exceptions.VerifyMismatchError:
         return False
 
