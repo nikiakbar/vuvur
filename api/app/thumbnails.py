@@ -3,8 +3,8 @@ import io
 import subprocess
 import logging
 import threading
-from flask import Blueprint, send_file, abort
-from werkzeug.exceptions import HTTPException
+from flask import Blueprint, send_file, abort, send_from_directory
+from werkzeug.exceptions import HTTPException, NotFound
 from PIL import Image, ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
@@ -150,6 +150,17 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
+    # ⚡ Bolt: Fast-path for cached thumbnails.
+    # Attempt to serve from disk directly, bypassing database query for path/type.
+    # This reduces gallery load time significantly by avoiding N database queries.
+    try:
+        return send_from_directory(THUMB_DIR, f"{mid}.jpg", mimetype="image/jpeg", max_age=31536000)
+    except NotFound:
+        try:
+            return send_from_directory(THUMB_DIR, f"{mid}.gif", mimetype="image/gif", max_age=31536000)
+        except NotFound:
+            pass # Not cached, proceed to generation path
+
     row = get_media_row(mid)
     src = row["path"]
     
@@ -157,10 +168,6 @@ def thumb(mid):
     thumb_ext = ".gif" if is_gif else ".jpg"
     dst = os.path.join(THUMB_DIR, f"{mid}{thumb_ext}")
     mime_type = "image/gif" if is_gif else "image/jpeg"
-
-    # 1. If the thumbnail exists, serve it instantly (Happy Path)
-    if os.path.exists(dst):
-        return send_file(dst, mimetype=mime_type, max_age=31536000)
 
     # 2. Source file is missing from disk
     if not os.path.exists(src):
