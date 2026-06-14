@@ -9,8 +9,9 @@ from PIL import Image, ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
 
-# Suppress DecompressionBombWarning and allow massive AI grids (e.g. 167+ megapixel PNGs)
-Image.MAX_IMAGE_PIXELS = None
+# Limit maximum image pixels to prevent Decompression Bomb DoS attacks.
+# 400MP is a reasonable limit for most large AI-generated images.
+Image.MAX_IMAGE_PIXELS = 400_000_000
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("thumbnails", __name__)
