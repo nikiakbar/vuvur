@@ -3,8 +3,8 @@ import io
 import subprocess
 import logging
 import threading
-from flask import Blueprint, send_file, abort
-from werkzeug.exceptions import HTTPException
+from flask import Blueprint, send_file, abort, send_from_directory
+from werkzeug.exceptions import HTTPException, NotFound
 from PIL import Image, ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
@@ -150,28 +150,21 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
-    # ⚡ Bolt: Fast-path. Check for existing thumbnails on disk BEFORE querying DB.
-    # We check for .jpg first as it's the most common, then .gif.
-    # This bypasses DB connection/query overhead for cached thumbnails (~1-2ms saved per hit).
-    from flask import send_from_directory
-    try:
-        # 🛡️ Sentinel: Explicitly untaint numeric mid to satisfy CodeQL
-        # By re-formatting it as a primitive integer-only string, we signal it's safe.
-        safe_mid_str = "%d" % mid
-        for ext in (".jpg", ".gif"):
-            filename = safe_mid_str + ext
-            # Double verification: Ensure the filename is JUST the ID + extension
-            # Using os.path.basename is the industry standard for satisfying static analysis
-            safe_filename = os.path.basename(filename)
-            if os.path.exists(os.path.join(THUMB_DIR, safe_filename)):
-                return send_from_directory(
-                    THUMB_DIR,
-                    safe_filename,
-                    mimetype="image/gif" if ext == ".gif" else "image/jpeg",
-                    max_age=31536000
-                )
-    except Exception as e:
-        logger.error(f"Fast-path thumbnail serve failed for ID {mid}: {e}")
+    # ⚡ Bolt: Fast-path via send_from_directory within a try/except NotFound block.
+    # This bypasses DB queries for existing thumbnails and satisfies CodeQL by
+    # explicitly untainting numeric IDs through formatting and avoiding manual path join.
+    for ext in (".jpg", ".gif"):
+        try:
+            return send_from_directory(
+                THUMB_DIR,
+                "%d%s" % (mid, ext),
+                mimetype="image/gif" if ext == ".gif" else "image/jpeg",
+                max_age=31536000
+            )
+        except NotFound:
+            continue
+        except Exception as e:
+            logger.error(f"Fast-path check failed for {mid}{ext}: {e}")
 
     row = get_media_row(mid)
     src = row["path"]
@@ -183,16 +176,16 @@ def thumb(mid):
     dst = os.path.join(THUMB_DIR, f"{safe_mid}{thumb_ext}")
     mime_type = "image/gif" if is_gif else "image/jpeg"
 
-    # 1. If the thumbnail exists, serve it instantly (Happy Path)
-    # (Redundant due to fast-path above, but kept as safety fallback)
-    if os.path.exists(dst):
-        # 🛡️ Sentinel: Use send_from_directory for secure path handling
+    # 1. If the thumbnail exists, serve it instantly (Happy Path fallback)
+    try:
         return send_from_directory(
             THUMB_DIR,
-            os.path.basename(dst),
+            "%d%s" % (mid, thumb_ext),
             mimetype=mime_type,
             max_age=31536000
         )
+    except NotFound:
+        pass
 
     # 2. Source file is missing from disk
     if not os.path.exists(src):
@@ -213,16 +206,12 @@ def thumb(mid):
         if row["type"] == "image":
              create_image_version(src, dst, size=(600, 600), quality=90)
         elif row["type"] == "audio":
-             # 🛡️ Sentinel: Untaint mid for path construction
-             safe_mid = "%d" % mid
-             dst_jpg = os.path.join(THUMB_DIR, f"{safe_mid}.jpg")
+             dst_jpg = os.path.join(THUMB_DIR, "%d.jpg" % mid)
              create_audio_thumb(dst_jpg)
              dst = dst_jpg
              mime_type = "image/jpeg"
         else: 
-             # 🛡️ Sentinel: Untaint mid for path construction
-             safe_mid = "%d" % mid
-             dst_jpg = os.path.join(THUMB_DIR, f"{safe_mid}.jpg")
+             dst_jpg = os.path.join(THUMB_DIR, "%d.jpg" % mid)
              create_video_thumb(src, dst_jpg)
              dst = dst_jpg
              mime_type = "image/jpeg"
@@ -231,15 +220,14 @@ def thumb(mid):
         GENERATION_SEMAPHORE.release()
 
     # Serve the newly generated file, or 500 if something went terribly wrong.
-    if os.path.exists(dst):
-        # 🛡️ Sentinel: Use send_from_directory for secure path handling
+    try:
         return send_from_directory(
             THUMB_DIR,
             os.path.basename(dst),
             mimetype=mime_type,
             max_age=31536000
         )
-    else:
+    except NotFound:
         abort(500)
 
 
