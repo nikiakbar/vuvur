@@ -2,10 +2,12 @@ from flask import Blueprint, request, jsonify
 import sqlite3
 from app.db import DB_PATH
 from app.api_key_middleware import api_key_required
+from app.auth_middleware import login_required
 
 search_bp = Blueprint("search", __name__)
 @search_bp.route("/api/search")
 @api_key_required
+@login_required
 def search():
     q = request.args.get("q", "").strip()
     if not q:

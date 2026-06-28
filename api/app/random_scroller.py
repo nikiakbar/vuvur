@@ -1,10 +1,12 @@
 from flask import Blueprint, jsonify, request
 from app.db import get_db
 from app.api_key_middleware import api_key_required
+from app.auth_middleware import login_required
 
 bp = Blueprint("random_scroller", __name__)
 @bp.route("/api/files/random")
 @api_key_required
+@login_required
 def random_files():
     """Get a list of random media files."""
     try:
@@ -27,6 +29,7 @@ def random_files():
 
 @bp.route("/api/random-single")
 @api_key_required
+@login_required
 def random_single():
     """Get a single random media file, optionally matching a query."""
     q = request.args.get("q", "").strip()
