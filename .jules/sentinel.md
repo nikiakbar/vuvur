@@ -12,3 +12,8 @@
 **Vulnerability:** API endpoints were returning raw exception messages (`str(e)`) to the client, exposing internal implementation details.
 **Learning:** Using `str(e)` in a production API response is a shortcut that often leaks sensitive information about the environment, database schema, or code structure.
 **Prevention:** Always catch exceptions, log the detailed error server-side (using `logger.error(..., exc_info=True)`), and return a generic, non-descriptive error message to the client.
+
+## 2026-04-20 - Timing Side-Channel in Username Authentication
+**Vulnerability:** The authentication process returned immediately when a username was not found, but performed an expensive Argon2 hash verification for existing users, enabling username enumeration via timing analysis.
+**Learning:** Authentication workflows must be time-invariant with respect to the existence of a user account. Skipping password hashing for invalid usernames is a common performance optimization that introduces a critical security side-channel.
+**Prevention:** Use a pre-computed dummy hash and always perform a verification step even if the user is missing from the database.
