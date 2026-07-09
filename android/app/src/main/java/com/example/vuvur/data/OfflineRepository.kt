@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.example.vuvur.MediaFile
+import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.ByteArrayOutputStream
