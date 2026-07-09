@@ -18,11 +18,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.vuvur.GalleryUiState
 import com.example.vuvur.components.MediaSlide
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ViewerScreen(
     viewModel: MediaViewModel,
+    offlineViewModel: OfflineViewModel = viewModel(),
     startIndex: Int,
     navController: NavController
 ) {
@@ -49,9 +51,19 @@ fun ViewerScreen(
                     pageCount = { currentState.files.size }
                 )
 
-                // ✅ Update currentFileId when page changes
+                // ✅ Update currentFileId and trigger auto-save when page changes
                 LaunchedEffect(pagerState.currentPage, currentState.files) {
-                    currentFileId = currentState.files.getOrNull(pagerState.currentPage)?.id
+                    val currentFile = currentState.files.getOrNull(pagerState.currentPage)
+                    currentFileId = currentFile?.id
+                    
+                    // Auto-save offline
+                    currentFile?.let { file ->
+                        offlineViewModel.saveCurrentItem(
+                            mediaFile = file,
+                            apiUrl = currentState.activeApiUrl,
+                            apiKey = currentState.activeApiKey
+                        )
+                    }
                 }
 
                 LaunchedEffect(pagerState.isScrollInProgress) {

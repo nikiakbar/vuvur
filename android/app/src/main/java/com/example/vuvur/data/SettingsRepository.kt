@@ -8,6 +8,9 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore // Import preferencesDataStore
+import com.example.vuvur.data.OfflineMediaItem
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers // Import Dispatchers
 import kotlinx.coroutines.SupervisorJob // Import SupervisorJob
@@ -36,6 +39,8 @@ class SettingsRepository(
         val API_LIST = stringSetPreferencesKey("api_list")
         val ZOOM_LEVEL = floatPreferencesKey("zoom_level")
         val PASSCODE = stringPreferencesKey("passcode")
+        val OFFLINE_STORAGE_LIMIT_GB = floatPreferencesKey("offline_storage_limit_gb")
+        val OFFLINE_INDEX = stringPreferencesKey("offline_index")
     }
 
     // Use a default list relevant to your setup or common defaults
@@ -77,6 +82,20 @@ class SettingsRepository(
 
     val passcodeFlow: Flow<String?> = dataStore.data.map { preferences ->
         preferences[PreferencesKeys.PASSCODE]
+    }
+
+    // --- Offline storage ---
+    private val gson = Gson()
+    private val offlineItemListType = object : TypeToken<List<OfflineMediaItem>>() {}.type
+
+    val offlineStorageLimitGbFlow: Flow<Float> = dataStore.data.map { preferences ->
+        preferences[PreferencesKeys.OFFLINE_STORAGE_LIMIT_GB] ?: 2.0f
+    }
+
+    val offlineIndexFlow: Flow<List<OfflineMediaItem>> = dataStore.data.map { preferences ->
+        val json = preferences[PreferencesKeys.OFFLINE_INDEX]
+        if (json.isNullOrEmpty()) emptyList()
+        else gson.fromJson(json, offlineItemListType) ?: emptyList()
     }
 
     private val _refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
@@ -137,5 +156,22 @@ class SettingsRepository(
 
     suspend fun triggerRefresh() {
         _refreshTrigger.emit(Unit)
+    }
+
+    suspend fun saveOfflineStorageLimitGb(gb: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.OFFLINE_STORAGE_LIMIT_GB] = gb
+        }
+    }
+
+    suspend fun saveOfflineIndex(items: List<OfflineMediaItem>) {
+        val json = gson.toJson(items)
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.OFFLINE_INDEX] = json
+        }
+    }
+
+    suspend fun getOfflineIndex(): List<OfflineMediaItem> {
+        return offlineIndexFlow.first()
     }
 }

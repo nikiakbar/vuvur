@@ -42,6 +42,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsState()
     var showApiDropdown by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showClearOfflineDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -70,6 +71,29 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             },
             dismissButton = {
                 TextButton(onClick = { showClearCacheDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showClearOfflineDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearOfflineDialog = false },
+            title = { Text("Confirm Clear Offline Cache") },
+            text = { Text("Are you sure you want to delete all offline media? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearOfflineCache()
+                        showClearOfflineDialog = false
+                    }
+                ) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearOfflineDialog = false }) {
                     Text("Cancel")
                 }
             }
@@ -145,6 +169,39 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
+
+                // --- Offline Storage Section ---
+                Text("Offline Storage Limit", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
+                
+                // Display used vs limit
+                val usedGb = state.usedOfflineStorageBytes / (1024.0 * 1024.0 * 1024.0)
+                Text(
+                    text = String.format("Used: %.2f GB / %.1f GB", usedGb, state.offlineStorageLimitGb),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Slider(
+                        value = state.offlineStorageLimitGb,
+                        onValueChange = { viewModel.saveOfflineStorageLimit(it) },
+                        valueRange = 0.5f..20f,
+                        steps = 38, // (20 - 0.5) / 0.5 = 39 values -> 38 steps
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "${String.format("%.1f", state.offlineStorageLimitGb)} GB",
+                        modifier = Modifier.padding(start = 16.dp)
+                    )
+                }
+
+                Button(
+                    onClick = { showClearOfflineDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Clear Offline Cache")
+                }
+                // -------------------------------
             }
 
             Button(

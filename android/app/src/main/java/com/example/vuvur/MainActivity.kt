@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CropPortrait
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
@@ -56,6 +57,9 @@ import androidx.navigation.navArgument
 import com.example.vuvur.screens.GalleryScreen
 import com.example.vuvur.screens.LockScreen
 import com.example.vuvur.screens.MediaViewModel
+import com.example.vuvur.screens.OfflineGalleryScreen
+import com.example.vuvur.screens.OfflineViewModel
+import com.example.vuvur.screens.OfflineViewerScreen
 import com.example.vuvur.screens.RandomScreen
 import com.example.vuvur.screens.SettingsScreen
 import com.example.vuvur.screens.SingleMediaScreen
@@ -65,6 +69,7 @@ import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     data object Gallery : Screen("gallery", "Gallery", Icons.Default.Home)
+    data object Offline : Screen("offline", "Offline", Icons.Default.CloudDownload)
     data object Random : Screen("random", "Random", Icons.Default.Shuffle)
     data object Single : Screen("single", "Single", Icons.Default.CropPortrait)
     data object Settings : Screen("settings", "Settings", Icons.Default.Settings)
@@ -73,6 +78,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 
 val menuItems = listOf(
     Screen.Gallery,
+    Screen.Offline,
     Screen.Random,
     Screen.Single,
     Screen.Settings
@@ -133,7 +139,7 @@ fun AppNavigation() {
     val currentDestination = navBackStackEntry?.destination
 
     val route = currentDestination?.route
-    val isFullscreen = route == Screen.Random.route || route == Screen.Single.route || route?.startsWith("viewer") == true
+    val isFullscreen = route == Screen.Random.route || route == Screen.Single.route || route?.startsWith("viewer") == true || route?.startsWith("offline_viewer") == true
     val gesturesEnabled = !isFullscreen
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -235,6 +241,24 @@ fun AppNavigation() {
                 ) { backStackEntry ->
                     ViewerScreen(
                         viewModel = mediaViewModel,
+                        startIndex = backStackEntry.arguments?.getInt("startIndex") ?: 0,
+                        navController = navController
+                    )
+                }
+                composable(Screen.Offline.route) {
+                    val offlineViewModel: OfflineViewModel = viewModel()
+                    OfflineGalleryScreen(
+                        viewModel = offlineViewModel,
+                        navController = navController
+                    )
+                }
+                composable(
+                    route = "offline_viewer/{startIndex}",
+                    arguments = listOf(navArgument("startIndex") { type = NavType.IntType })
+                ) { backStackEntry ->
+                    val offlineViewModel: OfflineViewModel = viewModel()
+                    OfflineViewerScreen(
+                        viewModel = offlineViewModel,
                         startIndex = backStackEntry.arguments?.getInt("startIndex") ?: 0,
                         navController = navController
                     )

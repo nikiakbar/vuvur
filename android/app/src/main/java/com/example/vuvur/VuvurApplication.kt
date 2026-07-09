@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.ImageDecoderDecoder
+import com.example.vuvur.data.OfflineRepository
 import com.example.vuvur.data.SettingsRepository
 import com.example.vuvur.data.dataStore
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +24,9 @@ class VuvurApplication : Application(), ImageLoaderFactory {
     // Initialize repository using the imported dataStore and applicationScope
     val settingsRepository by lazy {
         SettingsRepository(dataStore, applicationScope)
+    }
+    val offlineRepository by lazy {
+        OfflineRepository(settingsRepository)
     }
     val apiClient by lazy {
         ApiClient(settingsRepository)

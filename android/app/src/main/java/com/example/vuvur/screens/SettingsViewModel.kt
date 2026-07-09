@@ -19,6 +19,8 @@ data class SettingsUiState(
     val apiAliases: Map<String, String> = emptyMap(),
     // ✅ Add zoomLevel to the UI state
     val zoomLevel: Float = 2.5f,
+    val offlineStorageLimitGb: Float = 2.0f,
+    val usedOfflineStorageBytes: Long = 0L,
     val message: String? = null
 )
 
@@ -37,15 +39,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             combine(
                 repository.activeApiUrlFlow,
                 repository.apiListFlow,
-                repository.zoomLevelFlow
-            ) { activeUrl, urlList, zoom ->
+                repository.zoomLevelFlow,
+                repository.offlineStorageLimitGbFlow,
+                app.offlineRepository.offlineItemsFlow
+            ) { activeUrl, urlList, zoom, offlineLimit, offlineItems ->
                 // ✅ Extract aliases for the list of URLs
                 val aliases = urlList.associateWith { repository.getAliasForUrl(it) }
+                val usedBytes = offlineItems.sumOf { it.sizeBytes }
                 SettingsUiState(
                     activeApi = activeUrl,
                     apiList = urlList,
                     apiAliases = aliases,
-                    zoomLevel = zoom
+                    zoomLevel = zoom,
+                    offlineStorageLimitGb = offlineLimit,
+                    usedOfflineStorageBytes = usedBytes
                 )
             }.collect {
                 _uiState.value = it
@@ -88,5 +95,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun clearMessage() {
         _uiState.value = _uiState.value.copy(message = null)
+    }
+
+    fun saveOfflineStorageLimit(gb: Float) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveOfflineStorageLimitGb(gb)
+        }
+    }
+
+    fun clearOfflineCache() {
+        viewModelScope.launch(Dispatchers.IO) {
+            app.offlineRepository.clearAllOfflineMedia(app)
+            _uiState.value = _uiState.value.copy(message = "Offline cache cleared")
+        }
     }
 }
