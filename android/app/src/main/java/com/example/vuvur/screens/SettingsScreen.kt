@@ -198,7 +198,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     onExpandedChange = { showCacheModeDropdown = !showCacheModeDropdown }
                 ) {
                     OutlinedTextField(
-                        value = if (state.offlineCacheMode == "ALL") "Cache All" else "Cache on View",
+                        value = if (state.offlineCacheMode == "ALL") "Cache All (On Screen)" else "Cache on Tap",
                         onValueChange = {},
                         label = { Text("Cache Mode") },
                         readOnly = true,
@@ -212,14 +212,14 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                         onDismissRequest = { showCacheModeDropdown = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Cache on View") },
+                            text = { Text("Cache on Tap") },
                             onClick = {
                                 viewModel.saveOfflineCacheMode("ON_VIEW")
                                 showCacheModeDropdown = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Cache All") },
+                            text = { Text("Cache All (On Screen)") },
                             onClick = {
                                 viewModel.saveOfflineCacheMode("ALL")
                                 showCacheModeDropdown = false

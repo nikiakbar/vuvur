@@ -58,7 +58,7 @@ fun ViewerScreen(
                     
                     // Auto-save offline
                     currentFile?.let { file ->
-                        offlineViewModel.saveCurrentItem(
+                        offlineViewModel.saveItem(
                             mediaFile = file,
                             apiUrl = currentState.activeApiUrl,
                             apiKey = currentState.activeApiKey

@@ -78,6 +78,7 @@ import com.example.vuvur.MediaFile
 @Composable
 fun GalleryScreen(
     viewModel: MediaViewModel,
+    offlineViewModel: OfflineViewModel,
     onImageClick: (Int) -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -307,6 +308,7 @@ fun GalleryScreen(
                                 files = currentState.files,
                                 activeApiUrl = currentState.activeApiUrl,
                                 activeApiKey = currentState.activeApiKey, // Pass key
+                                offlineViewModel = offlineViewModel,
                                 onScrolledToEnd = {
                                     if (!currentState.isLoadingNextPage && currentState.currentPage < currentState.totalPages) {
                                         viewModel.loadPage(currentState.currentPage + 1)
@@ -398,10 +400,13 @@ fun GalleryGrid(
     files: List<MediaFile>,
     activeApiUrl: String,
     activeApiKey: String?, // Accept key
+    offlineViewModel: OfflineViewModel,
     onScrolledToEnd: () -> Unit,
     onImageClick: (Int) -> Unit,
     onDeleteClick: (Int) -> Unit
 ) {
+    val cacheMode by offlineViewModel.cacheModeFlow.collectAsState()
+
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Adaptive(150.dp),
         modifier = Modifier.fillMaxSize(), // Grid fills its available space
@@ -413,6 +418,11 @@ fun GalleryGrid(
             if (index >= files.size - 10) {
                 LaunchedEffect(Unit) {
                     onScrolledToEnd()
+                }
+            }
+            if (cacheMode == "ALL") {
+                LaunchedEffect(file.id) {
+                    offlineViewModel.saveItem(file, activeApiUrl, activeApiKey)
                 }
             }
             MediaThumbnail(

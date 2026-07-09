@@ -135,6 +135,7 @@ fun AppNavigation() {
         val scope = rememberCoroutineScope()
 
         val mediaViewModel: MediaViewModel = viewModel()
+        val offlineViewModel: OfflineViewModel = viewModel()
         val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
@@ -216,6 +217,7 @@ fun AppNavigation() {
                 composable(Screen.Gallery.route) {
                     GalleryScreen(
                         viewModel = mediaViewModel,
+                        offlineViewModel = offlineViewModel,
                         onImageClick = { index ->
                             navController.navigate("viewer/$index")
                         }
@@ -241,6 +243,7 @@ fun AppNavigation() {
                 ) { backStackEntry ->
                     ViewerScreen(
                         viewModel = mediaViewModel,
+                        offlineViewModel = offlineViewModel,
                         startIndex = backStackEntry.arguments?.getInt("startIndex") ?: 0,
                         navController = navController
                     )
