@@ -1,14 +1,13 @@
 package com.example.vuvur.screens
 
 import android.app.Application
-import android.net.Uri
-import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.vuvur.MediaFile
 import com.example.vuvur.VuvurApplication
 import com.example.vuvur.data.OfflineMediaItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -53,7 +52,7 @@ class OfflineViewModel(application: Application) : AndroidViewModel(application)
         return offlineRepo.decryptToTempFile(app, item)
     }
 
-    private var cacheAllJob: kotlinx.coroutines.Job? = null
+    private var cacheAllJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -81,10 +80,10 @@ class OfflineViewModel(application: Application) : AndroidViewModel(application)
 
                 while (hasMore && isActive) {
                     val response = apiService.getFiles(sortBy = "date_desc", query = "", page = currentPage, group = null, subgroup = null)
-                    if (response.files.isEmpty()) {
+                    if (response.items.isEmpty()) {
                         hasMore = false
                     } else {
-                        for (file in response.files) {
+                        for (file in response.items) {
                             if (!isActive) break
                             try {
                                 offlineRepo.saveMediaOffline(app, file, apiUrl, apiKey)
