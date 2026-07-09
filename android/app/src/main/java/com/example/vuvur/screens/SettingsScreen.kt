@@ -171,7 +171,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 }
 
                 // --- Offline Storage Section ---
-                Text("Offline Storage Limit", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
+                Text("Offline Storage Settings", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp))
                 
                 // Display used vs limit
                 val usedGb = state.usedOfflineStorageBytes / (1024.0 * 1024.0 * 1024.0)
@@ -180,18 +180,52 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     style = MaterialTheme.typography.bodyMedium
                 )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Slider(
-                        value = state.offlineStorageLimitGb,
-                        onValueChange = { viewModel.saveOfflineStorageLimit(it) },
-                        valueRange = 0.5f..20f,
-                        steps = 38, // (20 - 0.5) / 0.5 = 39 values -> 38 steps
-                        modifier = Modifier.weight(1f)
+                OutlinedTextField(
+                    value = state.offlineStorageLimitGb.toString(),
+                    onValueChange = { newValue ->
+                        newValue.toFloatOrNull()?.let {
+                            if (it in 0.5f..500f) viewModel.saveOfflineStorageLimit(it)
+                        }
+                    },
+                    label = { Text("Storage Limit (GB)") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                var showCacheModeDropdown by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = showCacheModeDropdown,
+                    onExpandedChange = { showCacheModeDropdown = !showCacheModeDropdown }
+                ) {
+                    OutlinedTextField(
+                        value = if (state.offlineCacheMode == "ALL") "Cache All" else "Cache on View",
+                        onValueChange = {},
+                        label = { Text("Cache Mode") },
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showCacheModeDropdown) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
                     )
-                    Text(
-                        text = "${String.format("%.1f", state.offlineStorageLimitGb)} GB",
-                        modifier = Modifier.padding(start = 16.dp)
-                    )
+                    ExposedDropdownMenu(
+                        expanded = showCacheModeDropdown,
+                        onDismissRequest = { showCacheModeDropdown = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Cache on View") },
+                            onClick = {
+                                viewModel.saveOfflineCacheMode("ON_VIEW")
+                                showCacheModeDropdown = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Cache All") },
+                            onClick = {
+                                viewModel.saveOfflineCacheMode("ALL")
+                                showCacheModeDropdown = false
+                            }
+                        )
+                    }
                 }
 
                 Button(

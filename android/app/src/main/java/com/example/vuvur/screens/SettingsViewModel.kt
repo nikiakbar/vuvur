@@ -21,6 +21,7 @@ data class SettingsUiState(
     val zoomLevel: Float = 2.5f,
     val offlineStorageLimitGb: Float = 2.0f,
     val usedOfflineStorageBytes: Long = 0L,
+    val offlineCacheMode: String = "ON_VIEW",
     val message: String? = null
 )
 
@@ -41,8 +42,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 repository.apiListFlow,
                 repository.zoomLevelFlow,
                 repository.offlineStorageLimitGbFlow,
+                repository.offlineCacheModeFlow,
                 app.offlineRepository.offlineItemsFlow
-            ) { activeUrl, urlList, zoom, offlineLimit, offlineItems ->
+            ) { activeUrl, urlList, zoom, offlineLimit, cacheMode, offlineItems ->
                 // ✅ Extract aliases for the list of URLs
                 val aliases = urlList.associateWith { repository.getAliasForUrl(it) }
                 val usedBytes = offlineItems.sumOf { it.sizeBytes }
@@ -52,7 +54,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     apiAliases = aliases,
                     zoomLevel = zoom,
                     offlineStorageLimitGb = offlineLimit,
-                    usedOfflineStorageBytes = usedBytes
+                    usedOfflineStorageBytes = usedBytes,
+                    offlineCacheMode = cacheMode
                 )
             }.collect {
                 _uiState.value = it
@@ -100,6 +103,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun saveOfflineStorageLimit(gb: Float) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.saveOfflineStorageLimitGb(gb)
+        }
+    }
+
+    fun saveOfflineCacheMode(mode: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveOfflineCacheMode(mode)
         }
     }
 

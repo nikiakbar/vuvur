@@ -130,27 +130,32 @@ fun OfflineGalleryItem(
             .background(Color.DarkGray, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
     ) {
-        // Thumbnail: We can't display encrypted image directly here easily.
-        // For now, display a placeholder icon/text. If we want thumbnails in gallery, 
-        // we'd need to decrypt them to memory or temp files, which is heavy for a grid.
-        // A better approach for a real app might be to store a tiny unencrypted thumbnail.
-        // For this implementation, we will show a placeholder.
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = if (item.type == "video") androidx.compose.material.icons.Icons.Default.Delete else androidx.compose.material.icons.Icons.Default.Delete, // TODO: Use better icons if available
-                    contentDescription = item.type,
-                    tint = Color.White,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Text(
-                    text = if (item.type == "video") "Video" else "Image",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodySmall
-                )
+        if (item.type.lowercase().let { it == "image" || it == "gif" }) {
+            AsyncImage(
+                model = item,
+                contentDescription = "Offline Image",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // Placeholder for video
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Delete, // TODO: Use better icons if available
+                        contentDescription = "Video",
+                        tint = Color.White,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "Video",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
 

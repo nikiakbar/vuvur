@@ -41,6 +41,7 @@ class SettingsRepository(
         val PASSCODE = stringPreferencesKey("passcode")
         val OFFLINE_STORAGE_LIMIT_GB = floatPreferencesKey("offline_storage_limit_gb")
         val OFFLINE_INDEX = stringPreferencesKey("offline_index")
+        val OFFLINE_CACHE_MODE = stringPreferencesKey("offline_cache_mode")
     }
 
     // Use a default list relevant to your setup or common defaults
@@ -96,6 +97,10 @@ class SettingsRepository(
         val json = preferences[PreferencesKeys.OFFLINE_INDEX]
         if (json.isNullOrEmpty()) emptyList()
         else gson.fromJson(json, offlineItemListType) ?: emptyList()
+    }
+
+    val offlineCacheModeFlow: Flow<String> = dataStore.data.map { preferences ->
+        preferences[PreferencesKeys.OFFLINE_CACHE_MODE] ?: "ON_VIEW"
     }
 
     private val _refreshTrigger = MutableSharedFlow<Unit>(replay = 1)
@@ -161,6 +166,12 @@ class SettingsRepository(
     suspend fun saveOfflineStorageLimitGb(gb: Float) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.OFFLINE_STORAGE_LIMIT_GB] = gb
+        }
+    }
+
+    suspend fun saveOfflineCacheMode(mode: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.OFFLINE_CACHE_MODE] = mode
         }
     }
 

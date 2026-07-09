@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -50,5 +51,57 @@ class OfflineViewModel(application: Application) : AndroidViewModel(application)
 
     suspend fun decryptToTempFile(item: OfflineMediaItem): File {
         return offlineRepo.decryptToTempFile(app, item)
+    }
+
+    private var cacheAllJob: kotlinx.coroutines.Job? = null
+
+    init {
+        viewModelScope.launch {
+            app.settingsRepository.offlineCacheModeFlow.collect { mode ->
+                if (mode == "ALL") {
+                    startCacheAllJob()
+                } else {
+                    cacheAllJob?.cancel()
+                }
+            }
+        }
+    }
+
+    private fun startCacheAllJob() {
+        if (cacheAllJob?.isActive == true) return
+        
+        cacheAllJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val apiUrl = app.settingsRepository.getActiveApiUrl()
+                val apiKey = app.settingsRepository.getApiKeyForUrl(apiUrl)
+                val apiService = app.apiClient.createService(apiUrl, apiKey)
+
+                var currentPage = 1
+                var hasMore = true
+
+                while (hasMore && isActive) {
+                    val response = apiService.getMediaFiles(page = currentPage, limit = 50)
+                    if (response.files.isEmpty()) {
+                        hasMore = false
+                    } else {
+                        for (file in response.files) {
+                            if (!isActive) break
+                            try {
+                                offlineRepo.saveMediaOffline(app, file, apiUrl, apiKey)
+                            } catch (e: com.example.vuvur.data.StorageQuotaExceededException) {
+                                // Reached limit and couldn't make space, stop caching
+                                hasMore = false
+                                break
+                            } catch (e: Exception) {
+                                e.printStackTrace() // Ignore network errors and continue
+                            }
+                        }
+                        currentPage++
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 }

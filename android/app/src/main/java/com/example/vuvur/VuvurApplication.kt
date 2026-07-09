@@ -77,6 +77,7 @@ class VuvurApplication : Application(), ImageLoaderFactory {
             .okHttpClient(coilOkHttpClient)
             .components {
                 add(ImageDecoderDecoder.Factory())
+                add(com.example.vuvur.data.OfflineMediaFetcher.Factory())
             }
             .crossfade(true) // Optional: for smooth image loading
             .build()

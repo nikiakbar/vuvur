@@ -67,10 +67,27 @@ class OfflineRepository(
         // Check quota before encrypting/writing
         val limitGb = settingsRepository.offlineStorageLimitGbFlow.first()
         val limitBytes = (limitGb * 1024 * 1024 * 1024).toLong()
-        val currentUsed = existingIndex.sumOf { it.sizeBytes }
+        var currentUsed = existingIndex.sumOf { it.sizeBytes }
         val estimatedNewSize = processedBytes.size.toLong() + 28L // +28 for IV + GCM tag overhead
+        
+        var updatedIndex = existingIndex
         if (currentUsed + estimatedNewSize > limitBytes) {
-            throw StorageQuotaExceededException(limitGb)
+            // Sort by oldest first
+            val sortedByOldest = updatedIndex.sortedBy { it.savedAt }.toMutableList()
+            
+            while (currentUsed + estimatedNewSize > limitBytes && sortedByOldest.isNotEmpty()) {
+                val oldestItem = sortedByOldest.removeAt(0)
+                val offlineDir = File(context.filesDir, OFFLINE_DIR)
+                File(offlineDir, oldestItem.fileName).delete()
+                currentUsed -= oldestItem.sizeBytes
+                updatedIndex = sortedByOldest.toList()
+            }
+            
+            // Still no space even after deleting everything (limit is very small or file is huge)?
+            if (currentUsed + estimatedNewSize > limitBytes) {
+                // We'll throw the exception if we can't make space
+                throw StorageQuotaExceededException(limitGb)
+            }
         }
 
         // Encrypt
@@ -92,7 +109,7 @@ class OfflineRepository(
             savedAt = System.currentTimeMillis(),
             sizeBytes = outFile.length()
         )
-        settingsRepository.saveOfflineIndex(existingIndex + newItem)
+        settingsRepository.saveOfflineIndex(updatedIndex + newItem)
     }
 
     /**
