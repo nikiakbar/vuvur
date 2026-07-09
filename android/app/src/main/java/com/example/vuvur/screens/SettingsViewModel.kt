@@ -38,13 +38,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             // ✅ Combine all settings flows into one UI state
             combine(
-                repository.activeApiUrlFlow,
-                repository.apiListFlow,
-                repository.zoomLevelFlow,
-                repository.offlineStorageLimitGbFlow,
-                repository.offlineCacheModeFlow,
-                app.offlineRepository.offlineItemsFlow
-            ) { activeUrl, urlList, zoom, offlineLimit, cacheMode, offlineItems ->
+                combine(
+                    repository.activeApiUrlFlow,
+                    repository.apiListFlow,
+                    repository.zoomLevelFlow,
+                    ::Triple
+                ),
+                combine(
+                    repository.offlineStorageLimitGbFlow,
+                    repository.offlineCacheModeFlow,
+                    app.offlineRepository.offlineItemsFlow,
+                    ::Triple
+                )
+            ) { (activeUrl, urlList, zoom), (offlineLimit, cacheMode, offlineItems) ->
                 // ✅ Extract aliases for the list of URLs
                 val aliases = urlList.associateWith { repository.getAliasForUrl(it) }
                 val usedBytes = offlineItems.sumOf { it.sizeBytes }

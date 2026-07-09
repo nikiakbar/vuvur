@@ -80,7 +80,7 @@ class OfflineViewModel(application: Application) : AndroidViewModel(application)
                 var hasMore = true
 
                 while (hasMore && isActive) {
-                    val response = apiService.getMediaFiles(page = currentPage, limit = 50)
+                    val response = apiService.getFiles(sortBy = "date_desc", query = "", page = currentPage, group = null, subgroup = null)
                     if (response.files.isEmpty()) {
                         hasMore = false
                     } else {
