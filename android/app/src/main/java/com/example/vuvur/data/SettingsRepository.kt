@@ -8,9 +8,6 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore // Import preferencesDataStore
-import com.example.vuvur.data.OfflineMediaItem
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers // Import Dispatchers
 import kotlinx.coroutines.SupervisorJob // Import SupervisorJob
@@ -40,7 +37,8 @@ class SettingsRepository(
         val ZOOM_LEVEL = floatPreferencesKey("zoom_level")
         val PASSCODE = stringPreferencesKey("passcode")
         val OFFLINE_STORAGE_LIMIT_GB = floatPreferencesKey("offline_storage_limit_gb")
-        val OFFLINE_INDEX = stringPreferencesKey("offline_index")
+        // OFFLINE_INDEX removed — the index is now stored as index.json on external storage
+        // alongside the encrypted media files (survives app uninstall).
         val OFFLINE_CACHE_MODE = stringPreferencesKey("offline_cache_mode")
     }
 
@@ -86,17 +84,9 @@ class SettingsRepository(
     }
 
     // --- Offline storage ---
-    private val gson = Gson()
-    private val offlineItemListType = object : TypeToken<List<OfflineMediaItem>>() {}.type
 
     val offlineStorageLimitGbFlow: Flow<Float> = dataStore.data.map { preferences ->
         preferences[PreferencesKeys.OFFLINE_STORAGE_LIMIT_GB] ?: 2.0f
-    }
-
-    val offlineIndexFlow: Flow<List<OfflineMediaItem>> = dataStore.data.map { preferences ->
-        val json = preferences[PreferencesKeys.OFFLINE_INDEX]
-        if (json.isNullOrEmpty()) emptyList()
-        else gson.fromJson(json, offlineItemListType) ?: emptyList()
     }
 
     val offlineCacheModeFlow: Flow<String> = dataStore.data.map { preferences ->
@@ -175,14 +165,13 @@ class SettingsRepository(
         }
     }
 
-    suspend fun saveOfflineIndex(items: List<OfflineMediaItem>) {
-        val json = gson.toJson(items)
+    /**
+     * Clears any stale OFFLINE_INDEX entry left in DataStore from the old storage scheme.
+     * Called once during migration; safe to call repeatedly (no-op if key is absent).
+     */
+    suspend fun clearOfflineIndex() {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.OFFLINE_INDEX] = json
+            preferences.remove(stringPreferencesKey("offline_index"))
         }
-    }
-
-    suspend fun getOfflineIndex(): List<OfflineMediaItem> {
-        return offlineIndexFlow.first()
     }
 }

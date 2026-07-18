@@ -10,11 +10,14 @@ import com.example.vuvur.data.dataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first // ✅ Import 'first'
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking // ✅ Import 'runBlocking'
-import okhttp3.Interceptor // ✅ Import 'Interceptor'
-import okhttp3.OkHttpClient // ✅ Import 'OkHttpClient'
+import kotlinx.coroutines.runBlocking
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 // Define the CoroutineScope at the application level
 private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -51,8 +54,19 @@ class VuvurApplication : Application(), ImageLoaderFactory {
         // ✅ Create a custom OkHttpClient for Coil
         val coilOkHttpClient = OkHttpClient.Builder()
             .addInterceptor { chain ->
-                // This interceptor will run for every image request
+                // Block ALL network requests when duress mode is active.
+                // Return a fake empty 200 so Coil fails gracefully without making any call.
+                if (DuressState.isActive) {
+                    return@addInterceptor Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body(ByteArray(0).toResponseBody())
+                        .build()
+                }
 
+                // This interceptor will run for every image request
                 // ✅ Use runBlocking to synchronously get the current URL and Key
                 // This is safe because Coil runs this on a background thread.
                 val (activeUrl, apiKey) = runBlocking(Dispatchers.IO) {

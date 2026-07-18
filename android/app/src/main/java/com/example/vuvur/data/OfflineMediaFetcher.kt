@@ -7,8 +7,8 @@ import coil.fetch.FetchResult
 import coil.fetch.Fetcher
 import coil.fetch.SourceResult
 import coil.request.Options
+import com.example.vuvur.VuvurApplication
 import okio.Buffer
-import java.io.File
 
 class OfflineMediaFetcher(
     private val data: OfflineMediaItem,
@@ -19,14 +19,9 @@ class OfflineMediaFetcher(
         val isImage = data.type.lowercase().let { it == "image" || it == "gif" }
         if (!isImage) return null // Currently, we only fetch images/thumbnails
 
-        val offlineDir = File(options.context.filesDir, "offline")
-        val encryptedFile = File(offlineDir, data.fileName)
-        
-        if (!encryptedFile.exists()) return null
-
         try {
-            val encryptedBytes = encryptedFile.readBytes()
-            val plainBytes = CryptoManager.decrypt(encryptedBytes)
+            val app = options.context.applicationContext as VuvurApplication
+            val plainBytes = app.offlineRepository.decryptToBytes(options.context, data)
             
             // Provide the decrypted bytes to Coil as a buffer
             val buffer = Buffer().apply { write(plainBytes) }

@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.vuvur.DuressState
 import kotlinx.coroutines.launch
 
 @Composable
@@ -40,13 +43,60 @@ fun LockScreen(
     var firstEntry by rememberSaveable { mutableStateOf("") }
     var isConfirming by rememberSaveable { mutableStateOf(false) }
 
+    // Holds a confirmed palindrome passcode pending the user's decision in the warning dialog
+    var pendingPalindromeCode by rememberSaveable { mutableStateOf<String?>(null) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     val title = when {
         isSetupMode && !isConfirming -> "Create Passcode"
-        isSetupMode && isConfirming -> "Confirm Passcode"
-        else -> "Enter Passcode"
+        isSetupMode && isConfirming  -> "Confirm Passcode"
+        else                         -> "Enter Passcode"
+    }
+
+    // Palindrome warning dialog — shown only during setup when a palindrome is confirmed
+    if (pendingPalindromeCode != null) {
+        AlertDialog(
+            onDismissRequest = {
+                // User dismissed without choosing — treat as "choose different"
+                pendingPalindromeCode = null
+                enteredCode = ""
+                firstEntry = ""
+                isConfirming = false
+            },
+            title = { Text("Duress Mode Unavailable") },
+            text = {
+                Text(
+                    "Your passcode reads the same forwards and backwards (palindrome), " +
+                    "so a reversed duress code cannot be created.\n\n" +
+                    "Duress mode lets you enter your passcode in reverse to show an empty app " +
+                    "with no media and no network access.\n\n" +
+                    "Would you like to use this passcode anyway, or choose a different one?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    // User accepts the palindrome passcode — proceed without duress mode
+                    val code = pendingPalindromeCode ?: return@TextButton
+                    pendingPalindromeCode = null
+                    onPasscodeSet(code)
+                }) {
+                    Text("Use Anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    // User wants to pick a different passcode
+                    pendingPalindromeCode = null
+                    enteredCode = ""
+                    firstEntry = ""
+                    isConfirming = false
+                }) {
+                    Text("Choose Different")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -86,7 +136,15 @@ fun LockScreen(
                                 isConfirming = true
                             } else {
                                 if (enteredCode == firstEntry) {
-                                    onPasscodeSet(enteredCode)
+                                    val code = enteredCode
+                                    // Check for palindrome — duress mode won't work
+                                    if (code == code.reversed()) {
+                                        // Pause and warn the user via dialog before proceeding
+                                        pendingPalindromeCode = code
+                                        enteredCode = ""
+                                    } else {
+                                        onPasscodeSet(code)
+                                    }
                                 } else {
                                     scope.launch {
                                         snackbarHostState.showSnackbar("Passcodes do not match. Start over.")
@@ -97,13 +155,22 @@ fun LockScreen(
                                 }
                             }
                         } else {
-                            if (enteredCode == correctCode) {
-                                onUnlock()
-                            } else {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Incorrect passcode")
+                            when (DuressState.evaluate(enteredCode, correctCode ?: "")) {
+                                DuressState.UnlockResult.Real -> {
+                                    // Correct passcode — normal unlock
+                                    onUnlock()
                                 }
-                                enteredCode = ""
+                                DuressState.UnlockResult.Duress -> {
+                                    // Reversed passcode — activate duress mode silently,
+                                    // then unlock so the UI looks completely normal
+                                    onUnlock()
+                                }
+                                DuressState.UnlockResult.Wrong -> {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Incorrect passcode")
+                                    }
+                                    enteredCode = ""
+                                }
                             }
                         }
                     }
