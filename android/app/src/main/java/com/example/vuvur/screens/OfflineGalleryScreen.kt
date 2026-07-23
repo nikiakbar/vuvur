@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,10 @@ fun OfflineGalleryScreen(
     viewModel: OfflineViewModel,
     navController: NavController
 ) {
+    LaunchedEffect(Unit) {
+        viewModel.loadIndex()
+    }
+
     val offlineItems by viewModel.offlineItems.collectAsState()
     var showDeleteDialog by remember { mutableStateOf<OfflineMediaItem?>(null) }
 

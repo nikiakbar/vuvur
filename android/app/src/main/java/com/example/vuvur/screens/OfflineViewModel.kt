@@ -19,6 +19,16 @@ class OfflineViewModel(application: Application) : AndroidViewModel(application)
     private val app = application as VuvurApplication
     private val offlineRepo = app.offlineRepository
 
+    init {
+        loadIndex()
+    }
+
+    fun loadIndex() {
+        viewModelScope.launch(Dispatchers.IO) {
+            offlineRepo.loadIndex(app)
+        }
+    }
+
     val offlineItems: StateFlow<List<OfflineMediaItem>> = offlineRepo.offlineItemsFlow
         .stateIn(
             scope = viewModelScope,

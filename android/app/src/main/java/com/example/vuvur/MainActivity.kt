@@ -249,7 +249,6 @@ fun AppNavigation() {
                     )
                 }
                 composable(Screen.Offline.route) {
-                    val offlineViewModel: OfflineViewModel = viewModel()
                     OfflineGalleryScreen(
                         viewModel = offlineViewModel,
                         navController = navController
@@ -259,7 +258,6 @@ fun AppNavigation() {
                     route = "offline_viewer/{startIndex}",
                     arguments = listOf(navArgument("startIndex") { type = NavType.IntType })
                 ) { backStackEntry ->
-                    val offlineViewModel: OfflineViewModel = viewModel()
                     OfflineViewerScreen(
                         viewModel = offlineViewModel,
                         startIndex = backStackEntry.arguments?.getInt("startIndex") ?: 0,

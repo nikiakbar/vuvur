@@ -268,8 +268,8 @@ class OfflineRepository(
      * This directory survives app uninstall on all Android versions.
      */
     private fun getBaseDir(context: Context): File {
-        val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-        return File(docs, "Vuvur").also { it.mkdirs() }
+        val base = context.getExternalFilesDir(null) ?: context.filesDir
+        return File(base, "Vuvur").also { it.mkdirs() }
     }
 
     private fun getMediaDir(context: Context): File =
