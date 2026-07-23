@@ -2,7 +2,10 @@ package com.example.vuvur.screens
 
 import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.VerticalPager
@@ -28,6 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
@@ -176,7 +182,7 @@ fun OfflineMediaViewer(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (isLoading) {
             CircularProgressIndicator()
         } else if (hasError || decryptedFile == null) {
@@ -184,11 +190,94 @@ fun OfflineMediaViewer(
         } else {
             val isImage = item.type.lowercase().let { it == "image" || it == "gif" }
             if (isImage) {
-                AsyncImage(
-                    model = Uri.fromFile(decryptedFile),
-                    contentDescription = "Offline Image",
-                    modifier = Modifier.fillMaxSize()
-                )
+                val containerWidth = constraints.maxWidth.toFloat()
+                val containerHeight = constraints.maxHeight.toFloat()
+                
+                var scale by remember { mutableStateOf(1f) }
+                var offsetX by remember { mutableStateOf(0f) }
+                var offsetY by remember { mutableStateOf(0f) }
+
+                LaunchedEffect(item) {
+                    scale = 1f
+                    offsetX = 0f
+                    offsetY = 0f
+                }
+                
+                LaunchedEffect(isCurrentlyVisible) {
+                    if (!isCurrentlyVisible) {
+                        scale = 1f
+                        offsetX = 0f
+                        offsetY = 0f
+                    }
+                }
+
+                fun maxOffsets(currentScale: Float): Pair<Float, Float> {
+                    val maxX = (containerWidth * (currentScale - 1f)) / 2f
+                    val maxY = (containerHeight * (currentScale - 1f)) / 2f
+                    return Pair(maxX.coerceAtLeast(0f), maxY.coerceAtLeast(0f))
+                }
+
+                LaunchedEffect(scale) {
+                    if (scale > 1f) {
+                        val (mx, my) = maxOffsets(scale)
+                        offsetX = offsetX.coerceIn(-mx, mx)
+                        offsetY = offsetY.coerceIn(-my, my)
+                    } else {
+                        offsetX = 0f
+                        offsetY = 0f
+                    }
+                }
+
+                val dragModifier = if (scale > 1f) {
+                    Modifier.pointerInput(scale) {
+                        detectDragGestures { change, dragAmount ->
+                            val (dx, dy) = dragAmount
+                            val (mx, my) = maxOffsets(scale)
+                            offsetX = (offsetX + dx).coerceIn(-mx, mx)
+                            offsetY = (offsetY + dy).coerceIn(-my, my)
+                            change.consume()
+                        }
+                    }
+                } else Modifier
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(scale) {
+                            detectTapGestures(
+                                onDoubleTap = { tapOffset ->
+                                    if (scale <= 1f) {
+                                        val targetScale = 2.5f
+                                        val tx = (containerWidth / 2f - tapOffset.x) * (targetScale - 1f)
+                                        val ty = (containerHeight / 2f - tapOffset.y) * (targetScale - 1f)
+                                        scale = targetScale
+                                        val (mx, my) = maxOffsets(scale)
+                                        offsetX = tx.coerceIn(-mx, mx)
+                                        offsetY = ty.coerceIn(-my, my)
+                                    } else {
+                                        scale = 1f
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    }
+                                }
+                            )
+                        }
+                        .then(dragModifier)
+                ) {
+                    AsyncImage(
+                        model = Uri.fromFile(decryptedFile),
+                        contentDescription = "Offline Image",
+                        modifier = Modifier
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offsetX,
+                                translationY = offsetY
+                            )
+                            .fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
             } else {
                 // Video playback logic. Since ExoPlayer setup is complex and MediaSlide 
                 // is tightly coupled with network logic, we'd need a simpler video player here

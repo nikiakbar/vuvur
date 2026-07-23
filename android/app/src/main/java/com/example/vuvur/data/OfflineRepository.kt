@@ -19,6 +19,8 @@ import java.io.File
 import java.util.UUID
 import javax.crypto.AEADBadTagException
 import javax.crypto.SecretKey
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class StorageQuotaExceededException(limitGb: Float) :
     Exception("Offline storage quota of ${limitGb}GB exceeded")
@@ -169,7 +171,7 @@ class OfflineRepository(
      *
      * @throws WrongPasscodeException if the passcode produces the wrong key.
      */
-    suspend fun decryptToTempFile(context: Context, item: OfflineMediaItem): File {
+    suspend fun decryptToTempFile(context: Context, item: OfflineMediaItem): File = withContext(Dispatchers.IO) {
         // In duress mode, pretend decryption failed — the viewer screen will show
         // "Error decrypting file" which looks identical to a corrupt-file scenario.
         if (DuressState.isActive) throw IllegalStateException("Decryption unavailable")
@@ -191,14 +193,14 @@ class OfflineRepository(
         val ext = if (item.type.lowercase() in IMAGE_TYPES) "jpg" else "mp4"
         val tempFile = File(context.cacheDir, "offline_temp_${item.id}.$ext")
         tempFile.writeBytes(plainBytes)
-        return tempFile
+        tempFile
     }
 
     /**
      * Decrypts a cached image item for Coil display (no temp file — returns raw bytes).
      * Used by [OfflineMediaFetcher].
      */
-    suspend fun decryptToBytes(context: Context, item: OfflineMediaItem): ByteArray {
+    suspend fun decryptToBytes(context: Context, item: OfflineMediaItem): ByteArray = withContext(Dispatchers.IO) {
         if (DuressState.isActive) throw IllegalStateException("Decryption unavailable")
 
         val passcode = settingsRepository.passcodeFlow.first()
@@ -209,7 +211,7 @@ class OfflineRepository(
         val encryptedFile = File(getMediaDir(context), item.fileName)
         val encryptedBytes = encryptedFile.readBytes()
 
-        return try {
+        try {
             CryptoManager.decrypt(encryptedBytes, key)
         } catch (e: AEADBadTagException) {
             throw WrongPasscodeException()
