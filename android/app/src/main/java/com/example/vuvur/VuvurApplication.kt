@@ -38,8 +38,9 @@ class VuvurApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
-        // Initialize ApiService asynchronously
+        // Initialize ApiService asynchronously and load offline index
         applicationScope.launch {
+            offlineRepository.loadIndex(this@VuvurApplication)
             // Fetch initial URL using the suspend function from the initialized repository
             val activeUrl = settingsRepository.getActiveApiUrl()
             // Get the corresponding API key

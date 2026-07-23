@@ -112,17 +112,12 @@ class OfflineRepository(
         // Derive key (PBKDF2 from passcode + persisted salt)
         val key = getOrCreateKey(context, passcode)
 
-        // Determine URL
-        val isImage = mediaFile.type.lowercase().let { it in IMAGE_TYPES }
-        val mediaUrl = if (isImage) {
-            "$apiUrl/api/thumbnails/${mediaFile.id}?original=true"
-        } else {
-            "$apiUrl/api/stream/${mediaFile.id}"
-        }
+        // Determine URL (use stream endpoint for full media content)
+        val mediaUrl = "$apiUrl/api/stream/${mediaFile.id}"
 
-        // Download + compress
+        // Download
         val rawBytes = downloadBytes(mediaUrl, apiKey)
-        val processedBytes = if (isImage) compressImage(rawBytes) else rawBytes
+        val processedBytes = rawBytes
 
         // Enforce quota — evict oldest items if needed
         val limitGb = settingsRepository.offlineStorageLimitGbFlow.first()

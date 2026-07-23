@@ -27,7 +27,7 @@ class OfflineMediaFetcher(
             val buffer = Buffer().apply { write(plainBytes) }
             return SourceResult(
                 source = coil.decode.ImageSource(buffer, options.context),
-                mimeType = "image/jpeg",
+                mimeType = null,
                 dataSource = DataSource.DISK
             )
         } catch (e: Exception) {

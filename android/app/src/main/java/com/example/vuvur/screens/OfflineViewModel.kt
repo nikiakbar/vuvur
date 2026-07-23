@@ -39,20 +39,20 @@ class OfflineViewModel(application: Application) : AndroidViewModel(application)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = "ON_TAP"
+            initialValue = "ON_VIEW"
         )
 
     /**
      * Saves a media item offline. Call this from:
      * - GalleryScreen grid items (when mode == "ALL")
-     * - ViewerScreen page change (when mode == "ON_TAP" or always)
+     * - ViewerScreen page change (when mode == "ON_VIEW" or always)
      */
     fun saveItem(mediaFile: MediaFile, apiUrl: String, apiKey: String?) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                offlineRepo.saveMediaOffline(app, mediaFile, apiUrl, apiKey)
+                offlineRepo.saveMediaOffline(app, mediaFile, apiUrl, apiKey).getOrThrow()
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("OfflineViewModel", "Failed to save media item ${mediaFile.id} offline", e)
             }
         }
     }
