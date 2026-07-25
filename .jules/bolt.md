@@ -25,3 +25,7 @@
 ## 2026-04-15 - [Ubiquitous Late Row Lookup]
 **Learning:** Extending the Late Row Lookup pattern from just `RANDOM()` to ALL sorted and paginated queries consistently reduces memory pressure. Since the gallery queries often fetch many records before applying `LIMIT`, keeping the sorted working set restricted to only IDs ensures that large EXIF JSON strings aren't loaded until the final page of results is ready.
 **Action:** Use Late Row Lookup for all paginated queries on tables with large columns, regardless of the sort order.
+
+## 2026-05-20 - [Bypassing DB for Thumbnail Serving]
+**Learning:** Serving existing thumbnails directly from the filesystem using `flask.send_from_directory` is significantly faster than querying the database for metadata and performing manual path checks. This "fast-path" reduces API latency and database contention, especially during rapid gallery scrolling.
+**Action:** Always attempt to serve cached static assets via optimized framework helpers before performing database lookups.
