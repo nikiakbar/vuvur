@@ -131,7 +131,8 @@ def get_media_row(media_id):
     try:
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT * FROM media WHERE id=?", (media_id,))
+        # ⚡ Bolt: Select only necessary columns to avoid loading large EXIF blobs.
+        c.execute("SELECT path, type FROM media WHERE id=?", (media_id,))
         row = c.fetchone()
         if not row:
             logger.warning(f"Media ID not found: {media_id}")
@@ -150,15 +151,29 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
+    # ⚡ Bolt: Fast-path for cached thumbnails to bypass DB query.
+    # Check for existing .jpg or .gif thumbnails before hitting the database.
+    # This reduces DB load and latency for the most common "repeat" requests.
+    # We use os.path.abspath to ensure the resulting path is within THUMB_DIR.
+    base_thumb_dir = os.path.abspath(THUMB_DIR)
+    for ext, mime in [(".jpg", "image/jpeg"), (".gif", "image/gif")]:
+        dst_check = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}{ext}"))
+        if dst_check.startswith(base_thumb_dir) and os.path.exists(dst_check):
+            return send_file(dst_check, mimetype=mime, max_age=31536000)
+
     row = get_media_row(mid)
     src = row["path"]
     
     is_gif = src.lower().endswith(".gif")
     thumb_ext = ".gif" if is_gif else ".jpg"
-    dst = os.path.join(THUMB_DIR, f"{mid}{thumb_ext}")
+    dst = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}{thumb_ext}"))
+    if not dst.startswith(base_thumb_dir):
+        abort(400) # Safety check for path traversal
     mime_type = "image/gif" if is_gif else "image/jpeg"
 
     # 1. If the thumbnail exists, serve it instantly (Happy Path)
+    # This check remains as a fallback or in case of race conditions,
+    # although the loop above should catch most cases.
     if os.path.exists(dst):
         return send_file(dst, mimetype=mime_type, max_age=31536000)
 
@@ -181,12 +196,14 @@ def thumb(mid):
         if row["type"] == "image":
              create_image_version(src, dst, size=(600, 600), quality=90)
         elif row["type"] == "audio":
-             dst_jpg = os.path.join(THUMB_DIR, f"{mid}.jpg")
+             dst_jpg = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}.jpg"))
+             if not dst_jpg.startswith(base_thumb_dir): abort(400)
              create_audio_thumb(dst_jpg)
              dst = dst_jpg
              mime_type = "image/jpeg"
         else: 
-             dst_jpg = os.path.join(THUMB_DIR, f"{mid}.jpg")
+             dst_jpg = os.path.abspath(os.path.join(base_thumb_dir, f"{mid}.jpg"))
+             if not dst_jpg.startswith(base_thumb_dir): abort(400)
              create_video_thumb(src, dst_jpg)
              dst = dst_jpg
              mime_type = "image/jpeg"
