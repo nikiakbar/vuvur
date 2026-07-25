@@ -3,8 +3,8 @@ import io
 import subprocess
 import logging
 import threading
-from flask import Blueprint, send_file, abort
-from werkzeug.exceptions import HTTPException
+from flask import Blueprint, send_file, abort, send_from_directory
+from werkzeug.exceptions import HTTPException, NotFound
 from PIL import Image, ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
@@ -131,7 +131,8 @@ def get_media_row(media_id):
     try:
         conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT * FROM media WHERE id=?", (media_id,))
+        # ⚡ Bolt: Select only necessary columns to reduce database overhead.
+        c.execute("SELECT path, type FROM media WHERE id=?", (media_id,))
         row = c.fetchone()
         if not row:
             logger.warning(f"Media ID not found: {media_id}")
@@ -150,6 +151,15 @@ def get_media_row(media_id):
 @api_key_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
+    # ⚡ Bolt: Fast-path optimization. Attempt to serve existing thumbnails directly
+    # from disk using send_from_directory before hitting the database.
+    # This reduces overhead for cached files and avoids unnecessary SQL queries.
+    for ext, mime in [(".jpg", "image/jpeg"), (".gif", "image/gif")]:
+        try:
+            return send_from_directory(THUMB_DIR, f"{mid}{ext}", mimetype=mime, max_age=31536000)
+        except NotFound:
+            continue
+
     row = get_media_row(mid)
     src = row["path"]
     
