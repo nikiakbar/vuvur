@@ -4,6 +4,8 @@ from argon2 import PasswordHasher, exceptions
 
 DB_PATH = os.environ.get("DB_PATH", "/app/data/app.db")
 ph = PasswordHasher()
+# Pre-computed argon2 hash for 'dummy' to prevent timing-based username enumeration
+DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$KozlD7cBedChtYvqRs7LGw$uOtj0XUc/iDNGXJVBq819kZYfXDskxGVyHqlIEkyUeM"
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -114,12 +116,13 @@ def authenticate(username, password):
     row = c.fetchone()
     conn.close()
 
-    if not row:
-        return False
+    # ✅ Sentinel: Always perform a password verification to prevent timing attacks
+    # that could reveal whether a username exists in the database.
+    target_hash = row["password"] if row else DUMMY_HASH
 
     try:
-        ph.verify(row["password"], password)
-        return True
+        ph.verify(target_hash, password)
+        return row is not None
     except exceptions.VerifyMismatchError:
         return False
 
