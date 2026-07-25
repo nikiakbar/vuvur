@@ -12,3 +12,8 @@
 **Vulnerability:** API endpoints were returning raw exception messages (`str(e)`) to the client, exposing internal implementation details.
 **Learning:** Using `str(e)` in a production API response is a shortcut that often leaks sensitive information about the environment, database schema, or code structure.
 **Prevention:** Always catch exceptions, log the detailed error server-side (using `logger.error(..., exc_info=True)`), and return a generic, non-descriptive error message to the client.
+
+## 2026-05-24 - Timing-Based Username Enumeration in Authentication
+**Vulnerability:** The authentication logic was returning immediately if a username was not found, while performing a costly Argon2 verification for existing users.
+**Learning:** This discrepancy allows attackers to distinguish between existing and non-existent usernames by measuring response times.
+**Prevention:** Always perform a password verification against a `DUMMY_HASH` if the username is not found, ensuring consistent timing for all authentication requests.
