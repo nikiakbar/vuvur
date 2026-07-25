@@ -25,3 +25,7 @@
 ## 2026-04-15 - [Ubiquitous Late Row Lookup]
 **Learning:** Extending the Late Row Lookup pattern from just `RANDOM()` to ALL sorted and paginated queries consistently reduces memory pressure. Since the gallery queries often fetch many records before applying `LIMIT`, keeping the sorted working set restricted to only IDs ensures that large EXIF JSON strings aren't loaded until the final page of results is ready.
 **Action:** Use Late Row Lookup for all paginated queries on tables with large columns, regardless of the sort order.
+
+## 2026-07-01 - [DB Bypass for Cached Assets]
+**Learning:** For static assets like thumbnails that are served via an ID-based filename, attempting a direct `send_from_directory` (the "fast-path") before querying the database eliminates 100% of DB hits for cached items. This is significantly more efficient than even the most optimized SQL query.
+**Action:** Always implement a filesystem-first fast-path for asset-serving endpoints where the filename is predictable from the request parameters.
