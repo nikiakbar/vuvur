@@ -8,6 +8,7 @@ from werkzeug.exceptions import HTTPException
 from PIL import Image, ImageDraw
 from app.db import get_db
 from app.api_key_middleware import api_key_required
+from app.auth_middleware import login_required
 
 # Suppress DecompressionBombWarning and allow massive AI grids (e.g. 167+ megapixel PNGs)
 Image.MAX_IMAGE_PIXELS = None
@@ -148,6 +149,7 @@ def get_media_row(media_id):
 
 @bp.route("/api/thumbnails/<int:mid>")
 @api_key_required
+@login_required
 def thumb(mid):
     """Serves a thumbnail. JPG for most, GIF for original GIFs."""
     row = get_media_row(mid)

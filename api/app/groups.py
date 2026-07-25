@@ -1,10 +1,12 @@
 from flask import Blueprint, jsonify
 from app.db import get_db
 from app.api_key_middleware import api_key_required
+from app.auth_middleware import login_required
 
 bp = Blueprint("groups", __name__)
 @bp.route("/api/gallery/groups")
 @api_key_required
+@login_required
 def get_groups():
     """
     Get a list of all unique group_tags and the count of items in each.
