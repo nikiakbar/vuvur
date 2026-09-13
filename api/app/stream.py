@@ -42,11 +42,21 @@ def stream(media_id):
     if not range_header:
         return send_file(file_path, mimetype=mime_type)
 
-    # Parse Range header
-    range_match = range_header.strip().split("=")[-1]
-    start, end = range_match.split("-")
-    start = int(start)
-    end = int(end) if end else file_size - 1
+    # ✅ Sentinel: Safely parse Range header and validate byte bounds
+    try:
+        if not range_header.startswith("bytes="):
+            raise ValueError("Invalid range specifier")
+        range_val = range_header[6:].strip()
+        start_str, end_str = range_val.split("-", 1)
+        start = int(start_str)
+        end = int(end_str) if end_str else file_size - 1
+        if start < 0 or end < start or start >= file_size:
+            raise ValueError("Unsatisfiable range bounds")
+        end = min(end, file_size - 1)
+    except (ValueError, IndexError):
+        response = Response(status=416)
+        response.headers["Content-Range"] = f"bytes */{file_size}"
+        return response
 
     response = Response(
         generate_range_response(file_path, start, end),
