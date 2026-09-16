@@ -2,7 +2,9 @@ import React from 'react';
 import LazyImage from './LazyImage';
 import Masonry from 'react-masonry-css';
 
-const Gallery = ({ files, onImageClick, lastImageRef }) => {
+// ⚡ Bolt: React.memo optimization to prevent unnecessary re-renders of the media grid
+// when parent state updates (e.g., initial viewer modal toggles or background scan status polling).
+const Gallery = React.memo(({ files, onImageClick, lastImageRef }) => {
 
   if (!files || files.length === 0) {
     return <p>No media found. Check your filters or wait for the scan to complete.</p>;
@@ -55,6 +57,8 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
       })}
     </Masonry>
   );
-};
+});
+
+Gallery.displayName = 'Gallery';
 
 export default Gallery;
