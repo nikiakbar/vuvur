@@ -42,11 +42,36 @@ def stream(media_id):
     if not range_header:
         return send_file(file_path, mimetype=mime_type)
 
-    # Parse Range header
-    range_match = range_header.strip().split("=")[-1]
-    start, end = range_match.split("-")
-    start = int(start)
-    end = int(end) if end else file_size - 1
+    # Parse Range header strictly
+    try:
+        if "=" not in range_header:
+            raise ValueError("Missing '=' in Range header")
+        unit, range_match = range_header.strip().split("=", 1)
+        if unit.strip().lower() != "bytes":
+            raise ValueError("Unsupported unit")
+
+        start_str, end_str = range_match.split("-", 1)
+        if not start_str and not end_str:
+            raise ValueError("Empty range bounds")
+        elif not start_str:
+            suffix_len = int(end_str)
+            if suffix_len <= 0:
+                raise ValueError("Invalid suffix length")
+            start = max(0, file_size - suffix_len)
+            end = file_size - 1
+        elif not end_str:
+            start = int(start_str)
+            end = file_size - 1
+        else:
+            start = int(start_str)
+            end = int(end_str)
+
+        if start < 0 or start >= file_size or end >= file_size or start > end:
+            raise ValueError("Range out of bounds")
+    except (ValueError, IndexError):
+        response = Response(status=416)
+        response.headers.add("Content-Range", f"bytes */{file_size}")
+        return response
 
     response = Response(
         generate_range_response(file_path, start, end),
