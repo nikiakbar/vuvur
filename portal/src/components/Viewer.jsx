@@ -122,14 +122,6 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
           zoomLevel={zoomLevel || 2.5}
         />
       </div>
-      
-      {/* Navigation Indicators */}
-      <div className="viewer-nav-indicator top" onClick={() => setCurrentIndex(prev => Math.max(prev - 1, 0))}>
-        {currentIndex > 0 && <span className="arrow up-arrow">▲</span>}
-      </div>
-      <div className="viewer-nav-indicator bottom" onClick={() => setCurrentIndex(prev => Math.min(prev + 1, files.length - 1))}>
-        {currentIndex < files.length - 1 && <span className="arrow down-arrow">▼</span>}
-      </div>
     </div>
   );
 };

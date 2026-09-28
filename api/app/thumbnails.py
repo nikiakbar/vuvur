@@ -106,7 +106,7 @@ def create_error_thumb(dst):
             d.line([(150, 150), (450, 450)], fill=(200, 50, 50), width=20)
             d.line([(450, 150), (150, 450)], fill=(200, 50, 50), width=20)
             output_format = "JPEG" if dst.lower().endswith(".jpg") else "GIF"
-            img.save(dst, output_format, quality=90) if output_format == "JPEG" else img.save(dst, output_format)
+            img.save(dst, output_format, quality=80) if output_format == "JPEG" else img.save(dst, output_format)
             logger.info(f"Successfully saved error thumbnail to: {dst}")
     except Exception as eval_e:
         logger.error(f"Failed to create error thumbnail: {eval_e}", exc_info=True)
@@ -119,7 +119,7 @@ def create_audio_thumb(dst):
             # We can't easily rely on fonts being present, so just draw a simple shape
             # Draw a lighter grey circle in the middle
             d.ellipse([150, 150, 450, 450], fill=(100, 100, 100))
-            img.save(dst, "JPEG", quality=90)
+            img.save(dst, "JPEG", quality=80)
             logger.info(f"Successfully saved audio thumbnail to: {dst}")
     except Exception as e:
         logger.error(f"Failed to create audio thumbnail: {e}", exc_info=True)
@@ -179,7 +179,7 @@ def thumb(mid):
     try:
         # We secured a slot! Safe to generate.
         if row["type"] == "image":
-             create_image_version(src, dst, size=(600, 600), quality=90)
+             create_image_version(src, dst, size=(600, 600), quality=80)
         elif row["type"] == "audio":
              dst_jpg = os.path.join(THUMB_DIR, f"{mid}.jpg")
              create_audio_thumb(dst_jpg)
@@ -204,7 +204,7 @@ def thumb(mid):
 # Pre-generate the busy placeholder once at module load time to avoid disk I/O and race conditions
 BUSY_IMG_BYTES = io.BytesIO()
 with Image.new('RGB', (600, 600), color=(100, 100, 100)) as img:
-    img.save(BUSY_IMG_BYTES, "JPEG", quality=70)
+    img.save(BUSY_IMG_BYTES, "JPEG", quality=80)
 
 
 def serve_busy_placeholder():
