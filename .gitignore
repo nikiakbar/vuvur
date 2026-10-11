@@ -3,6 +3,9 @@
 __pycache__
 portal/node_modules/
 
+compose-dev.yaml
+compose-prod.yaml
+
 # Android
 android/.idea/
 !android/.idea/gradle.xml
