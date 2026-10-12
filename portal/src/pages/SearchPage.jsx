@@ -28,7 +28,7 @@ function SearchPage() {
           placeholder="e.g., 'artist_name' or 'landscape'..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyPress}
         />
         <button
           onClick={handleSearch}

@@ -26,7 +26,7 @@ const Gallery = ({ files, onImageClick, lastImageRef }) => {
         return (
           <div
             ref={isLastElement ? lastImageRef : null}
-            key={file.path + index}
+            key={file.id}
             className="gallery-item"
             onClick={() => onImageClick(index)}
             onKeyDown={(e) => {

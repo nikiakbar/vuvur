@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import MediaSlide from './MediaSlide';
 
-const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) => {
+const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel, onLoadMore }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
 
   // Preload adjacent images
@@ -20,6 +20,13 @@ const Viewer = ({ files, initialIndex, onClose, onLike, onDelete, zoomLevel }) =
     preload(nextIndex);
     preload(prevIndex);
   }, [currentIndex, files]);
+
+  // Trigger loading more data when viewer approaches end of files
+  useEffect(() => {
+    if (onLoadMore && currentIndex >= files.length - 5) {
+      onLoadMore();
+    }
+  }, [currentIndex, files.length, onLoadMore]);
 
   // Effect to handle keyboard shortcuts
   useEffect(() => {

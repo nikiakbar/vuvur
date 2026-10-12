@@ -187,7 +187,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
     >
       <div
         className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
-        onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
+        onMouseDown={(e) => { e.preventDefault(); handlePointerDown(e.clientX, e.clientY); }}
         onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY, e)}
         onMouseUp={handlePointerUp}
         onMouseLeave={() => setIsDragging(false)}
@@ -201,6 +201,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
             src={imageUrl}
             alt={file.path}
             decoding="async"
+            draggable="false"
             style={{
               transform: `scale(${isZoomed ? zoomLevel : 1}) translate(${currentPan.x}px, ${currentPan.y}px)`,
               pointerEvents: 'none'

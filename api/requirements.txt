@@ -8,3 +8,4 @@ filelock
 gevent
 piexif
 watchdog
+flask-compress

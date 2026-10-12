@@ -3,6 +3,7 @@ import os
 from flasgger import Swagger
 import logging
 from filelock import FileLock, Timeout
+from flask_compress import Compress
 
 from app import auth, db, gallery, groups, subgroups, like, scan_api, search, stream, random_scroller, thumbnails, health
 from app import delete
@@ -11,6 +12,11 @@ def create_app():
     """Create and configure an instance of the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
     swagger = Swagger(app)
+    
+    # Enable response compression (gzip)
+    # Compresses JSON, HTML, and other text-based responses
+    # Reduces bandwidth by 60-80% for typical API responses
+    Compress(app)
 
     secret_key = os.environ.get("SECRET_KEY", "dev")
     if secret_key == "dev":

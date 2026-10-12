@@ -107,6 +107,7 @@ function GalleryPage() {
   useEffect(() => {
     if (!scanStatus.scan_complete) return;
 
+    const controller = new AbortController();
     setIsLoading(true);
     const params = new URLSearchParams({
       sort: sortBy,
@@ -114,10 +115,10 @@ function GalleryPage() {
       page: page,
       limit: batchSize,
       group: selectedGroup,
-      subgroup: selectedSubgroup // Pass selected subgroup
+      subgroup: selectedSubgroup
     });
 
-    fetch(`/api/gallery?${params.toString()}`)
+    fetch(`/api/gallery?${params.toString()}`, { signal: controller.signal })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
@@ -127,30 +128,25 @@ function GalleryPage() {
           setFiles(prev => (page === 1 ? data.items : [...prev, ...data.items]));
           setHasMore(page < data.total_pages);
         } else {
-          // Handle case where API might return unexpected structure
           console.warn("Received unexpected data structure from /api/gallery:", data);
-          setFiles(prev => (page === 1 ? [] : prev)); // Clear on page 1 if data bad
+          setFiles(prev => (page === 1 ? [] : prev));
           setHasMore(false);
         }
         setIsLoading(false);
       })
       .catch((error) => {
+        if (error.name === 'AbortError') return; // Ignore cancelled requests
         console.error("Failed to fetch gallery:", error);
         setIsLoading(false);
-        // Optionally show an error message to the user here
       });
-    // Add selectedSubgroup dependency
+
+    return () => controller.abort();
   }, [scanStatus.scan_complete, page, sortBy, debouncedQuery, batchSize, selectedGroup, selectedSubgroup]);
 
   // Effect to reset gallery/pagination when filters change
   useEffect(() => {
     setPage(1);
     setFiles([]);
-    // Only reset subgroup if the main group changes
-    if (selectedSubgroup && !selectedGroup) {
-      setSelectedSubgroup('');
-    }
-    // Add selectedSubgroup dependency
   }, [sortBy, debouncedQuery, selectedGroup, selectedSubgroup]);
 
   // Infinite scroll observer (no changes needed here)
@@ -232,6 +228,13 @@ function GalleryPage() {
       window.location.reload();
     }
   };
+
+  // Trigger loading more pages (used by Viewer when user scrolls near end)
+  const loadMore = useCallback(() => {
+    if (!isLoading && hasMore) {
+      setPage(prev => prev + 1);
+    }
+  }, [isLoading, hasMore]);
 
   const openViewer = (index) => setInitialIndex(index);
   const closeViewer = () => setInitialIndex(null);
@@ -340,6 +343,7 @@ function GalleryPage() {
           onLike={handleLike}
           onDelete={handleDelete}
           zoomLevel={zoomLevel}
+          onLoadMore={loadMore}
         />
       )}
     </>

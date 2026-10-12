@@ -113,9 +113,15 @@ def gallery():
 
     conn.close()
 
-    return jsonify({
+    response = jsonify({
         "total_items": total_items,
         "page": page,
         "total_pages": total_pages,
         "items": items
     })
+    
+    # Cache gallery responses for 30 seconds to reduce load
+    # Clients can refetch after 30s to get new items
+    response.headers['Cache-Control'] = 'public, max-age=30, must-revalidate'
+    
+    return response
