@@ -77,24 +77,38 @@ def main():
     
     # --- PERIODIC SAFETY SCANNING & THUMBNAIL PRECOMPUTATION ---
     logger.info(f"Starting main service loop (Safety scan interval: {scan_interval}s)...")
+    last_thumb_id = 0  # Track pagination cursor
     try:
         while True:
             # Utilize the scan_interval window to precompute thumbnails
             start_wait = time.time()
+            consecutive_batches = 0  # Track how many batches processed in a row
+            
             while time.time() - start_wait < scan_interval:
                 try:
-                    processed_any = precompute_missing_thumbnails(batch_size=50)
+                    # Adaptive batch size: start large (200) for catch-up, then drop to 50 for responsiveness
+                    adaptive_batch = 200 if consecutive_batches < 3 else 50
+                    
+                    processed_any, last_thumb_id = precompute_missing_thumbnails(
+                        batch_size=adaptive_batch,
+                        last_processed_id=last_thumb_id
+                    )
+                    
                     if processed_any:
+                        consecutive_batches += 1
                         # Very small sleep to yield CPU between batches
                         time.sleep(1)
                         continue
                     else:
+                        # Caught up or reached end of current pagination cycle
+                        consecutive_batches = 0
                         # Caught up, sleep until next check or interval ends
                         remaining = scan_interval - (time.time() - start_wait)
                         if remaining > 0:
                             time.sleep(min(remaining, 60))
                 except Exception as e:
                     logger.error(f"Error during thumbnail precomputation: {e}", exc_info=True)
+                    consecutive_batches = 0
                     time.sleep(60) # Prevent tight error loops
                     
             try:

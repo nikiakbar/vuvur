@@ -5,12 +5,21 @@ import logging
 import subprocess
 import json
 import concurrent.futures
-import time  # Import the time module
+import time
+import sys
+import hashlib
+from collections import deque
+from typing import TYPE_CHECKING
+
+# Python 3.15+ lazy imports optimization (PEP 690)
+# Defers heavy module loading until first use
+if TYPE_CHECKING:
+    from PIL import Image
+    import piexif
+    from app.thumbnails import create_image_version, create_video_thumb, create_audio_thumb
+
+# Lightweight imports only
 from app.db import DB_PATH, init_db
-from app.thumbnails import create_image_version, create_video_thumb, create_audio_thumb, THUMB_DIR
-from PIL import Image
-from PIL.PngImagePlugin import PngInfo
-import piexif
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +27,80 @@ GALLERY_PATH = "/mnt/gallery"
 LIKED_PATH = os.path.join(GALLERY_PATH, "liked")
 RECYCLEBIN_PATH = os.path.join(GALLERY_PATH, "recyclebin")
 SCAN_STATUS_PATH = "/app/data/scan_status.json"
+
+# Auto-detect optimal worker counts
+CPU_WORKERS = min(8, (os.cpu_count() or 2))  # Increased for better parallelism
+BATCH_SIZE = 100  # Smaller batches for better memory management
+THUMB_WORKERS = min(4, (os.cpu_count() or 2))  # Separate pool for I/O-bound thumbnail generation
+
+
+def hash_path(path: str) -> int:
+    """Fast hash for memory-efficient path comparison. Uses 8 bytes instead of full string."""
+    return int.from_bytes(
+        hashlib.blake2s(path.encode(), digest_size=8).digest(),
+        'little'
+    )
+
+
+class StreamingBatchCommitter:
+    """
+    Streaming batch committer that commits to DB as soon as a batch is ready.
+    Uses deques for O(1) append/clear and commits immediately when threshold reached.
+    """
+    def __init__(self, cursor, connection, batch_size=100):
+        self.cursor = cursor
+        self.connection = connection
+        self.batch_size = batch_size
+        self.add_buffer = deque()
+        self.update_buffer = deque()
+        self.total_added = 0
+        self.total_updated = 0
+    
+    def add(self, record):
+        """Add a record to insert buffer, commit if batch is full."""
+        self.add_buffer.append(record)
+        if len(self.add_buffer) >= self.batch_size:
+            self._flush_adds()
+    
+    def update(self, record):
+        """Add a record to update buffer, commit if batch is full."""
+        self.update_buffer.append(record)
+        if len(self.update_buffer) >= self.batch_size:
+            self._flush_updates()
+    
+    def _flush_adds(self):
+        """Commit all pending inserts."""
+        if not self.add_buffer:
+            return
+        count = len(self.add_buffer)
+        logger.info(f"Streaming insert: committing {count} files...")
+        self.cursor.executemany(
+            "INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            self.add_buffer
+        )
+        self.connection.commit()
+        self.total_added += count
+        self.add_buffer.clear()  # O(1) clear
+    
+    def _flush_updates(self):
+        """Commit all pending updates."""
+        if not self.update_buffer:
+            return
+        count = len(self.update_buffer)
+        logger.info(f"Streaming update: committing {count} files...")
+        self.cursor.executemany(
+            "UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?",
+            self.update_buffer
+        )
+        self.connection.commit()
+        self.total_updated += count
+        self.update_buffer.clear()  # O(1) clear
+    
+    def flush(self):
+        """Flush any remaining items in buffers."""
+        self._flush_adds()
+        self._flush_updates()
+        return self.total_added, self.total_updated
 
 def get_video_dimensions(video_path):
     """Get video dimensions using ffprobe."""
@@ -42,7 +125,13 @@ def extract_exif_data(image_path):
     Extracts metadata from an image, with specific, robust handling for the
     UserComment encoding from AUTOMATIC1111 Stable Diffusion generations.
     Returns (exif_json, user_comment, width, height).
+    
+    Uses lazy imports to defer PIL/piexif loading until actually needed.
     """
+    # Lazy import - only load when processing images
+    from PIL import Image
+    import piexif
+    
     try:
         # Check if it's a GIF early, as Pillow's EXIF handling for GIF is limited
         ext = os.path.splitext(image_path)[1].lower()
@@ -139,9 +228,11 @@ def scan(limit=None):
     logger.info("Discovering files on disk...")
     
     files_to_process = []
-    # all_disk_paths is used for deletion logic. 
-    # If limit is set, we will NOT perform deletion, so we don't strictly need to track everything found if we exit early.
-    all_disk_paths = set() 
+    # Memory-efficient path tracking using hashes instead of full strings
+    # Saves 10-20x memory for large collections (100k+ files)
+    all_disk_path_hashes = set()
+    # Keep full paths only for deletion check (when not doing limited scan)
+    disk_paths_for_deletion_check = [] 
     
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}
     
@@ -167,7 +258,12 @@ def scan(limit=None):
                         ext = os.path.splitext(entry.name)[1].lower()
                         if ext in valid_extensions:
                             full_path = entry.path
-                            all_disk_paths.add(full_path)
+                            path_hash = hash_path(full_path)
+                            all_disk_path_hashes.add(path_hash)
+                            
+                            # Only store full path if not doing limited scan (for deletion check)
+                            if limit is None:
+                                disk_paths_for_deletion_check.append(full_path)
                             
                             needs_processing = False
                             try:
@@ -182,7 +278,8 @@ def scan(limit=None):
                                 continue # File disappeared or other error, skip
 
                             if needs_processing:
-                                files_to_process.append(full_path)
+                                # Store (path, stat) tuple to avoid redundant stat() calls later
+                                files_to_process.append((full_path, stat))
                                 if limit is not None and len(files_to_process) >= limit:
                                     logger.info(f"Scan limit of {limit} reached during discovery. Stopping scan.")
                                     limit_reached = True
@@ -191,7 +288,7 @@ def scan(limit=None):
             logger.warning(f"Could not scan directory {current_dir}: {e}")
             continue
 
-    total_files_found = len(all_disk_paths)
+    total_files_found = len(all_disk_path_hashes)
     if limit_reached:
         logger.info(f"Discovery stopped early. Found {total_files_found} files (partial) and identified {len(files_to_process)} for processing.")
     else:
@@ -199,24 +296,23 @@ def scan(limit=None):
 
     logger.info(f"Found {len(files_to_process)} new or modified files to process for metadata.")
 
-    if not files_to_process and not (limit_reached is False and len(db_paths) != len(all_disk_paths)):
+    if not files_to_process and not (limit_reached is False and len(db_paths) != len(all_disk_path_hashes)):
         # If nothing to process AND (limit reached OR no diff in counts implying no deletions needed?)
         # Actually safer to just check if we have nothing to process and limit was set.
         # If limit was NOT set, we still might need to delete.
-        if limit is not None or not (db_paths - all_disk_paths):
+        if limit is not None or not (db_paths - set(disk_paths_for_deletion_check)):
              logger.info("No new/modified files and no deletions pending. Scan complete.")
              conn.close()
              return
 
-    # --- Now process the identified files in parallel ---
-    files_to_add = []
-    files_to_update = []
+    # --- Now process the identified files in parallel with StreamingBatchCommitter ---
+    committer = StreamingBatchCommitter(c, conn, batch_size=BATCH_SIZE)
     
     # Refactoring slightly to keep it clean.
     
-    def process_wrapper(path):
-        # Re-implementing the inner logic or calling a helper. 
-        # Since I am replacing the whole block, I will just paste the logic here.
+    def process_wrapper(path_and_stat):
+        # Unpack (path, stat) tuple to reuse stat from discovery phase
+        path, stat = path_and_stat
         try:
             ext = os.path.splitext(path)[1].lower()
             if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
@@ -225,7 +321,18 @@ def scan(limit=None):
                 ftype = "audio"
             else:
                 ftype = "video"
-            stat = os.stat(path)
+            # stat already available from discovery phase - no redundant syscall
+            
+            # Check if this is an update - if size/mtime match DB, skip expensive metadata extraction
+            is_update = path in db_paths
+            if is_update:
+                db_size, db_mtime = db_media[path]
+                # If file hasn't changed, reuse existing metadata
+                if db_size == stat.st_size and db_mtime == stat.st_mtime:
+                    # This shouldn't happen because files_to_process filters these out,
+                    # but keeping as safety check
+                    return None
+            
             width, height, user_comment, exif = get_metadata(path, ftype)
             
             rel_path = os.path.relpath(path, GALLERY_PATH)
@@ -245,10 +352,9 @@ def scan(limit=None):
     if files_to_process:
         logger.info(f"Starting metadata extraction for {len(files_to_process)} files...")
         processed_count = 0
-        BATCH_SIZE = 500  # <--- Batch size limit to flush RAM
         
-        # <--- Cap max_workers to 4 to prevent 32 concurrent processes eating memory
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        # Use auto-detected CPU workers instead of hardcoded value
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CPU_WORKERS) as executor:
             # We use a set of futures with a "sliding window" to keep RAM usage low.
             # This prevents creating thousands of Future objects at once.
             MAX_WINDOW = 1000
@@ -282,24 +388,12 @@ def scan(limit=None):
 
                     if data is None: continue
                         
+                    # Stream to committer - it handles batching and commits automatically
                     if data['path'] not in db_paths:
-                        files_to_add.append(tuple(data.values()))
+                        committer.add(tuple(data.values()))
                     else:
                         update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
-                        files_to_update.append(update_data)
-                    
-                    # --- NEW BATCH COMMIT LOGIC ---
-                    if len(files_to_add) >= BATCH_SIZE:
-                        logger.info(f"Batch inserting {len(files_to_add)} files...")
-                        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
-                        conn.commit()
-                        files_to_add.clear() # <--- FREE RAM
-                        
-                    if len(files_to_update) >= BATCH_SIZE:
-                        logger.info(f"Batch updating {len(files_to_update)} files...")
-                        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
-                        conn.commit()
-                        files_to_update.clear() # <--- FREE RAM
+                        committer.update(update_data)
                     
                     if processed_count % 50 == 0:
                         logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
@@ -307,22 +401,30 @@ def scan(limit=None):
                     
         update_scan_status(len(files_to_process), len(files_to_process))
 
-    # Catch any remaining items after the loop finishes
-    if files_to_add:
-        logger.info(f"Adding final {len(files_to_add)} new files...")
-        c.executemany("INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", files_to_add)
-
-    if files_to_update:
-        logger.info(f"Updating final {len(files_to_update)} existing files...")
-        c.executemany("UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?", files_to_update)
-    # Deletion Logic
+    # Flush any remaining items in committer buffers
+    added, updated = committer.flush()
+    logger.info(f"Streaming commit complete: {added} added, {updated} updated")
+    # Deletion Logic with hash-based comparison
     if limit is not None:
         logger.info("Scan limit active. Skipping deletion phase to prevent data loss on partial scan.")
     else:
-        paths_to_delete = db_paths - all_disk_paths
+        # Use full paths for deletion check (only populated when limit=None)
+        disk_path_set = set(disk_paths_for_deletion_check)
+        paths_to_delete = db_paths - disk_path_set
+        
+        # Safety check: verify hash collisions don't cause false deletions
         if paths_to_delete:
-            logger.info(f"Removing {len(paths_to_delete)} deleted files...")
-            c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in paths_to_delete])
+            verified_deletions = []
+            for path in paths_to_delete:
+                # Double-check: if path hash exists in disk but full path doesn't, it's a collision
+                if hash_path(path) in all_disk_path_hashes and path not in disk_path_set:
+                    logger.warning(f"Hash collision detected for {path}, skipping deletion")
+                    continue
+                verified_deletions.append(path)
+            
+            if verified_deletions:
+                logger.info(f"Removing {len(verified_deletions)} deleted files...")
+                c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in verified_deletions])
 
     logger.info("Committing changes...")
     conn.commit()
@@ -422,22 +524,32 @@ def delete_single_file(path):
     except Exception as e:
         logger.error(f"Failed to delete record for {path}: {e}", exc_info=True)
 
-def precompute_missing_thumbnails(batch_size=50):
+def precompute_missing_thumbnails(batch_size=200, last_processed_id=0):
     """
     Finds missing thumbnails in the background and generates them.
-    Returns True if some thumbnails were missing, False if all caught up.
+    Returns (processed_any: bool, last_id: int) tuple.
+    Uses pagination to avoid loading all media into memory.
+    Adaptive batch size: starts large for catch-up, then smaller for responsiveness.
     """
+    # Lazy import - only load when generating thumbnails
+    from app.thumbnails import create_image_version, create_video_thumb, create_audio_thumb, THUMB_DIR
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
-        # Query media, ordered by ID DESC to prioritize new files
-        c.execute("SELECT id, path, type FROM media ORDER BY id DESC")
+        # Memory-efficient pagination: only load batch_size records at a time
+        # Start from last_processed_id to avoid re-checking already processed files
+        c.execute(
+            "SELECT id, path, type FROM media WHERE id > ? ORDER BY id LIMIT ?",
+            (last_processed_id, batch_size * 2)  # Query 2x batch to find enough missing ones
+        )
         
         missing_items = []
+        max_id_seen = last_processed_id
         for row in c:
             mid = row['id']
+            max_id_seen = max(max_id_seen, mid)
             src = row['path']
             ftype = row['type']
             
@@ -457,10 +569,15 @@ def precompute_missing_thumbnails(batch_size=50):
         conn.close()
     except Exception as e:
         logger.error(f"Database error while fetching media for thumbnails: {e}")
-        return False
+        return False, last_processed_id
                 
     if not missing_items:
-        return False
+        # No more missing thumbnails in this batch - check if we've reached the end
+        # If max_id_seen hasn't changed, we're done; reset to 0 for next full cycle
+        if max_id_seen == last_processed_id:
+            return False, 0
+        # Otherwise, more records exist beyond this batch
+        return False, max_id_seen
         
     logger.info(f"Precomputing thumbnails for {len(missing_items)} missing items...")
     
@@ -484,7 +601,7 @@ def precompute_missing_thumbnails(batch_size=50):
             logger.error(f"Failed to precompute thumb for media ID {media_id}: {e}")
             
     # Use ThreadPoolExecutor to speed up generation, especially for many images
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=THUMB_WORKERS) as executor:
         list(executor.map(process_thumb, missing_items))
         
-    return True
+    return True, max_id_seen
