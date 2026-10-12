@@ -334,7 +334,7 @@ def process_file_chunk(files_chunk, committer, cursor, conn, db_paths_set, db_me
                     committer._flush_updates(cursor, conn)
                 
                 if processed_count % 50 == 0:
-                    logger.info(f"Metadata extraction progress: {offset + processed_count}/{offset + len(files_chunk)}")
+                    logger.info(f"Metadata extraction progress: {offset + processed_count}/{offset + len(files_chunk)} (chunk offset: {offset})")
                     update_scan_status(offset + processed_count, offset + len(files_chunk))
     
     return processed_count
@@ -356,6 +356,7 @@ def scan(limit=None):
     logger.info(f"Database contains {len(db_media)} records.")
 
     logger.info("Discovering files on disk...")
+    discovery_start = time.time()
     
     # Memory optimization: Stream processing in chunks
     # Process and clear files in batches to avoid holding all paths in memory
@@ -363,76 +364,145 @@ def scan(limit=None):
     files_to_process = []
     discovered_paths_for_deletion = set() if limit is None else None
     total_discovered = 0
-    total_processed_count = 0 
+    total_processed_count = 0
     
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}
     
     limit_reached = False
-    stack = [GALLERY_PATH]
     
-    while stack and not limit_reached:
-        current_dir = stack.pop()
+    # Parallel discovery: walk multiple subdirectories concurrently
+    # Each worker returns (files_to_process, discovered_paths) tuple
+    def walk_directory(start_dir):
+        """Walk a directory tree and return files needing processing."""
+        worker_start = time.time()
+        dir_name = os.path.basename(start_dir)
+        logger.info(f"Worker started: scanning directory '{dir_name}'...")
+        local_files_to_process = []
+        local_discovered_paths = set() if limit is None else None
+        local_limit_reached = False
         
-        # Skip recycle bin
-        if RECYCLEBIN_PATH in current_dir:
-            continue
+        stack = [start_dir]
+        while stack and not local_limit_reached:
+            current_dir = stack.pop()
             
-        try:
-            with os.scandir(current_dir) as it:
-                for entry in it:
-                    if limit_reached:
-                        break
-                        
-                    if entry.is_dir(follow_symlinks=False):
-                        stack.append(entry.path)
-                    elif entry.is_file(follow_symlinks=False):
-                        ext = os.path.splitext(entry.name)[1].lower()
-                        if ext in valid_extensions:
-                            full_path = entry.path
-                            
-                            # Track discovered paths for deletion check (memory-efficient set)
-                            if discovered_paths_for_deletion is not None:
-                                discovered_paths_for_deletion.add(full_path)
-                            
-                            needs_processing = False
-                            try:
-                                # entry.stat() is cached on Windows during scandir, making it very fast
-                                stat = entry.stat()
-                                if full_path not in db_paths_set:
-                                    needs_processing = True
-                                else:
-                                    # Fast in-memory comparison (no SQL query per file)
-                                    db_size, db_mtime = db_media[full_path]
-                                    if db_size != stat.st_size or db_mtime != stat.st_mtime:
+            # Skip recycle bin
+            if RECYCLEBIN_PATH in current_dir:
+                continue
+                
+            try:
+                with os.scandir(current_dir) as it:
+                    for entry in it:
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                        elif entry.is_file(follow_symlinks=False):
+                            ext = os.path.splitext(entry.name)[1].lower()
+                            if ext in valid_extensions:
+                                full_path = entry.path
+                                
+                                # Track discovered paths for deletion check
+                                if local_discovered_paths is not None:
+                                    local_discovered_paths.add(full_path)
+                                
+                                needs_processing = False
+                                try:
+                                    stat = entry.stat()
+                                    if full_path not in db_paths_set:
                                         needs_processing = True
-                            except (FileNotFoundError, OSError):
-                                continue # File disappeared or other error, skip
+                                    else:
+                                        db_size, db_mtime = db_media[full_path]
+                                        if db_size != stat.st_size or db_mtime != stat.st_mtime:
+                                            needs_processing = True
+                                except (FileNotFoundError, OSError):
+                                    continue
 
-                            if needs_processing:
-                                # Store (path, stat) tuple to avoid redundant stat() calls later
+                                if needs_processing:
+                                    local_files_to_process.append((full_path, stat))
+                                    
+                                    # Check limit (approximate, since we're parallel)
+                                    if limit is not None and len(local_files_to_process) >= limit // 4:
+                                        local_limit_reached = True
+                                        break
+            except (PermissionError, OSError) as e:
+                logger.warning(f"Could not scan directory {current_dir}: {e}")
+                continue
+        
+        worker_elapsed = time.time() - worker_start
+        logger.info(f"Worker finished: '{dir_name}' - found {len(local_discovered_paths) if local_discovered_paths else 0} total files, {len(local_files_to_process)} need processing ({worker_elapsed:.1f}s)")
+        return local_files_to_process, local_discovered_paths, local_limit_reached
+    
+    # Get top-level subdirectories to distribute across workers
+    try:
+        subdirs = []
+        with os.scandir(GALLERY_PATH) as it:
+            for entry in it:
+                if entry.is_dir(follow_symlinks=False):
+                    # Skip recycle bin and liked at top level
+                    if entry.name not in ('recyclebin', 'liked'):
+                        subdirs.append(entry.path)
+                elif entry.is_file(follow_symlinks=False):
+                    # Handle files directly in gallery root
+                    ext = os.path.splitext(entry.name)[1].lower()
+                    if ext in valid_extensions:
+                        full_path = entry.path
+                        if discovered_paths_for_deletion is not None:
+                            discovered_paths_for_deletion.add(full_path)
+                        
+                        try:
+                            stat = entry.stat()
+                            if full_path not in db_paths_set:
                                 files_to_process.append((full_path, stat))
-                                
-                                # Memory optimization: Process in chunks to avoid holding all paths
-                                if len(files_to_process) >= DISCOVERY_CHUNK_SIZE:
-                                    # Process this chunk before discovering more
-                                    total_processed_count += process_file_chunk(
-                                        files_to_process, committer, c, conn, db_paths_set, db_media, total_processed_count
-                                    )
-                                    files_to_process.clear()  # Free memory
-                                
-                                if limit is not None and total_processed_count + len(files_to_process) >= limit:
-                                    logger.info(f"Scan limit of {limit} reached during discovery. Stopping scan.")
-                                    limit_reached = True
-                                    break
-        except (PermissionError, OSError) as e:
-            logger.warning(f"Could not scan directory {current_dir}: {e}")
-            continue
+                            else:
+                                db_size, db_mtime = db_media[full_path]
+                                if db_size != stat.st_size or db_mtime != stat.st_mtime:
+                                    files_to_process.append((full_path, stat))
+                        except (FileNotFoundError, OSError):
+                            pass
+    except (PermissionError, OSError) as e:
+        logger.warning(f"Could not scan gallery root: {e}")
+    
+    # Use ThreadPoolExecutor for parallel directory walking
+    # Limit to 4 workers to avoid overwhelming filesystem
+    if subdirs:
+        logger.info(f"Parallel discovery: scanning {len(subdirs)} subdirectories with {min(4, len(subdirs))} workers...")
+        parallel_start = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(subdirs))) as executor:
+            results = executor.map(walk_directory, subdirs)
+            
+            for worker_files, worker_discovered, worker_limit in results:
+                if worker_files:
+                    files_to_process.extend(worker_files)
+                    
+                    # Process chunks as they come in
+                    while len(files_to_process) >= DISCOVERY_CHUNK_SIZE:
+                        chunk = files_to_process[:DISCOVERY_CHUNK_SIZE]
+                        files_to_process = files_to_process[DISCOVERY_CHUNK_SIZE:]
+                        total_processed_count += process_file_chunk(
+                            chunk, committer, c, conn, db_paths_set, db_media, total_processed_count
+                        )
+                
+                if worker_discovered and discovered_paths_for_deletion is not None:
+                    discovered_paths_for_deletion.update(worker_discovered)
+                
+                if worker_limit:
+                    limit_reached = True
+                    
+                # Check overall limit
+                if limit is not None and total_processed_count + len(files_to_process) >= limit:
+                    limit_reached = True
+                    break
+        
+        parallel_elapsed = time.time() - parallel_start
+        logger.info(f"Parallel discovery completed in {parallel_elapsed:.1f}s")
+    else:
+        logger.warning("No subdirectories found for parallel scanning")
 
     total_files_found = len(discovered_paths_for_deletion) if discovered_paths_for_deletion is not None else "unknown (limited scan)"
+    discovery_elapsed = time.time() - discovery_start
+    
     if limit_reached:
-        logger.info(f"Discovery stopped early. Processed {total_processed_count} files so far.")
+        logger.info(f"Discovery stopped early. Processed {total_processed_count} files so far. ({discovery_elapsed:.1f}s)")
     else:
-        logger.info(f"Discovery complete. Found {total_files_found} total media files.")
+        logger.info(f"Discovery complete. Found {total_files_found} total media files. ({discovery_elapsed:.1f}s)")
 
     logger.info(f"Remaining files in buffer: {len(files_to_process)}")
 
@@ -484,13 +554,18 @@ def scan(limit=None):
     conn.commit()
     conn.close()
     end_time = time.time()
-    logger.info(f"Library scan finished in {end_time - start_time:.2f} seconds.")
+    total_elapsed = end_time - start_time
+    logger.info(f"Library scan finished in {total_elapsed:.2f}s (discovery: {discovery_elapsed:.1f}s, processing: {total_elapsed - discovery_elapsed:.1f}s)")
 
 def get_metadata(path, ftype, file_size=None, file_mtime=None):
     """Helper function to get all metadata for a file."""
     user_comment, width, height, exif = None, None, None, None
     if ftype == "image":
-        exif, user_comment, width, height = extract_exif_data(path)
+        # Fast path for GIFs: skip EXIF extraction, just get dimensions
+        if path.lower().endswith('.gif'):
+            width, height = get_image_dimensions(path)
+        else:
+            exif, user_comment, width, height = extract_exif_data(path)
     elif ftype == 'video':
         # Always use direct ffprobe call (no cursor available in worker threads)
         width, height = get_video_dimensions(path)
