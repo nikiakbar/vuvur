@@ -445,10 +445,15 @@ body.no-scroll {
   overflow: hidden;
   flex-grow: 1;
   min-height: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .viewer-image-container.zoomed {
-  overflow: auto;
-  cursor: zoom-out;
+  overflow: hidden;
+  cursor: grab;
+}
+.viewer-image-container.zoomed.dragging {
+  cursor: grabbing;
 }
 .viewer-image-container img {
   max-width: 100vw; max-height: 100vh;
@@ -457,12 +462,15 @@ body.no-scroll {
   will-change: transform;
   transition: transform 0.3s ease;
   cursor: zoom-in;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 .viewer-image-container.zoomed img {
   max-width: none; max-height: none;
   transition: none;
-  cursor: default;
-  pointer-events: auto;
+  cursor: inherit;
+  pointer-events: none;
 }
 .viewer-image-container video {
   max-width: 100vw;

@@ -39,9 +39,9 @@ const ExifTable = ({ data }) => {
 const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, showControls, zoomLevel }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentPan, setCurrentPan] = useState({ x: 0, y: 0 });
-  const [startPan, setStartPan] = useState({ x: 0, y: 0 });
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const startPanRef = useRef({ x: 0, y: 0 });
   const didDrag = useRef(false);
   const videoRef = useRef(null);
   const slideInfoRef = useRef(null);
@@ -106,34 +106,56 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
   const handlePointerDown = (clientX, clientY) => {
     didDrag.current = false;
     setIsDragging(true);
-    setStartPos({ x: clientX, y: clientY });
-    setStartPan(currentPan);
+    startPosRef.current = { x: clientX, y: clientY };
+    startPanRef.current = currentPan;
   };
 
-  const handlePointerMove = (clientX, clientY, event) => {
-    if (!isDragging) return;
-    if (event) event.preventDefault();
-    const deltaX = clientX - startPos.x;
-    const deltaY = clientY - startPos.y;
+  const handlePointerMove = (clientX, clientY) => {
+    const deltaX = clientX - startPosRef.current.x;
+    const deltaY = clientY - startPosRef.current.y;
     if (!didDrag.current && (Math.abs(deltaX) > DRAG_THRESHOLD || Math.abs(deltaY) > DRAG_THRESHOLD)) {
       didDrag.current = true;
     }
     if (isZoomed && file.type === 'image') {
-      setCurrentPan({ x: startPan.x + deltaX, y: startPan.y + deltaY });
+      setCurrentPan({ x: startPanRef.current.x + deltaX, y: startPanRef.current.y + deltaY });
     }
   };
 
   const handlePointerUp = () => {
-    if (!didDrag.current && file.type === 'image') {
-      const newZoomState = !isZoomed;
-      setIsZoomed(newZoomState);
-      if (!newZoomState) {
-        setCurrentPan({ x: 0, y: 0 });
-      }
-    }
     setIsDragging(false);
+    if (!didDrag.current && file.type === 'image') {
+      setIsZoomed(prev => {
+        const next = !prev;
+        if (!next) {
+          setCurrentPan({ x: 0, y: 0 });
+        }
+        return next;
+      });
+    }
     setTimeout(() => { didDrag.current = false; }, 0);
   };
+
+  // Global window listeners while dragging to handle mouse moving outside container
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const onWindowMouseMove = (e) => {
+      e.preventDefault();
+      handlePointerMove(e.clientX, e.clientY);
+    };
+
+    const onWindowMouseUp = () => {
+      handlePointerUp();
+    };
+
+    window.addEventListener('mousemove', onWindowMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+    };
+  }, [isDragging, isZoomed, file.type]);
 
   const handleShowExif = (e) => {
     e.stopPropagation();
@@ -186,14 +208,25 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
       onTouchStart={resetControlsVisibility}
     >
       <div
-        className={`viewer-image-container ${isZoomed ? 'zoomed' : ''}`}
-        onMouseDown={(e) => { e.preventDefault(); handlePointerDown(e.clientX, e.clientY); }}
-        onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY, e)}
+        className={`viewer-image-container ${isZoomed ? 'zoomed' : ''} ${isDragging && isZoomed ? 'dragging' : ''}`}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          if (file.type === 'image') e.preventDefault();
+          handlePointerDown(e.clientX, e.clientY);
+        }}
         onMouseUp={handlePointerUp}
-        onMouseLeave={() => setIsDragging(false)}
-        onTouchStart={(e) => e.touches.length === 1 && handlePointerDown(e.touches[0].clientX, e.touches[0].clientY)}
-        onTouchMove={(e) => e.touches.length === 1 && handlePointerMove(e.touches[0].clientX, e.touches[0].clientY, e)}
-        onTouchEnd={handlePointerUp}
+        onTouchStart={(e) => {
+          if (isZoomed) e.stopPropagation();
+          if (e.touches.length === 1) handlePointerDown(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+        onTouchMove={(e) => {
+          if (isZoomed) e.stopPropagation();
+          if (e.touches.length === 1) handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+        onTouchEnd={(e) => {
+          if (isZoomed) e.stopPropagation();
+          handlePointerUp();
+        }}
         onTouchCancel={() => setIsDragging(false)}
       >
         {file.type === 'image' ? (
@@ -202,6 +235,7 @@ const MediaSlide = ({ file, index, currentIndex, onLike, onDelete, onClose, show
             alt={file.path}
             decoding="async"
             draggable="false"
+            onDragStart={(e) => e.preventDefault()}
             style={{
               transform: `scale(${isZoomed ? zoomLevel : 1}) translate(${currentPan.x}px, ${currentPan.y}px)`,
               pointerEvents: 'none'
