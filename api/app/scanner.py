@@ -102,6 +102,37 @@ class StreamingBatchCommitter:
         self._flush_updates()
         return self.total_added, self.total_updated
 
+def get_video_dimensions_cached(video_path, file_size, file_mtime, cursor):
+    """
+    Get video dimensions with caching to avoid redundant ffprobe calls.
+    Cache is validated by file size and mtime.
+    """
+    # Check cache first
+    cursor.execute("""
+        SELECT width, height 
+        FROM video_dimensions_cache 
+        WHERE path = ? AND file_size = ? AND file_mtime = ?
+    """, (video_path, file_size, file_mtime))
+    
+    result = cursor.fetchone()
+    if result:
+        # Cache hit - return immediately
+        return result[0], result[1]
+    
+    # Cache miss - call ffprobe
+    width, height = get_video_dimensions(video_path)
+    
+    # Update cache if we got valid dimensions
+    if width is not None and height is not None:
+        cursor.execute("""
+            INSERT OR REPLACE INTO video_dimensions_cache 
+            (path, file_size, file_mtime, width, height)
+            VALUES (?, ?, ?, ?, ?)
+        """, (video_path, file_size, file_mtime, width, height))
+    
+    return width, height
+
+
 def get_video_dimensions(video_path):
     """Get video dimensions using ffprobe."""
     try:
@@ -333,7 +364,7 @@ def scan(limit=None):
                     # but keeping as safety check
                     return None
             
-            width, height, user_comment, exif = get_metadata(path, ftype)
+            width, height, user_comment, exif = get_metadata(path, ftype, stat.st_size, stat.st_mtime, c)
             
             rel_path = os.path.relpath(path, GALLERY_PATH)
             group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
@@ -432,13 +463,17 @@ def scan(limit=None):
     end_time = time.time()
     logger.info(f"Library scan finished in {end_time - start_time:.2f} seconds.")
 
-def get_metadata(path, ftype):
+def get_metadata(path, ftype, file_size=None, file_mtime=None, cursor=None):
     """Helper function to get all metadata for a file."""
     user_comment, width, height, exif = None, None, None, None
     if ftype == "image":
         exif, user_comment, width, height = extract_exif_data(path)
     elif ftype == 'video':
-        width, height = get_video_dimensions(path)
+        # Use cached dimensions if cursor provided, otherwise fall back to direct call
+        if cursor is not None and file_size is not None and file_mtime is not None:
+            width, height = get_video_dimensions_cached(path, file_size, file_mtime, cursor)
+        else:
+            width, height = get_video_dimensions(path)
     # Audio files just return None for everything
     return width, height, user_comment, exif
 
@@ -511,8 +546,8 @@ def delete_single_file(path):
                 c.execute("DELETE FROM media WHERE path=?", (path,))
                 conn.commit()
                 logger.info(f"Deleted media record for: {path} (id={media_id})")
-                # Clean up associated thumbnail(s)
-                for ext in (".jpg", ".gif"):
+                # Clean up associated thumbnail(s) - check both old .jpg and new .webp/.gif
+                for ext in (".jpg", ".gif", ".webp"):
                     thumb_path = os.path.join(THUMB_DIR, f"{media_id}{ext}")
                     if os.path.exists(thumb_path):
                         os.remove(thumb_path)
@@ -554,12 +589,13 @@ def precompute_missing_thumbnails(batch_size=200, last_processed_id=0):
             ftype = row['type']
             
             is_gif = src.lower().endswith(".gif")
-            thumb_ext = ".gif" if is_gif else ".jpg"
+            # Use WebP for most thumbnails, GIF only for original GIFs
+            thumb_ext = ".gif" if is_gif else ".webp"
             dst = os.path.join(THUMB_DIR, f"{mid}{thumb_ext}")
             
-            # Audio and Video thumbs are always .jpg
+            # Audio and Video thumbs are always .webp
             if ftype in ("audio", "video"):
-                dst = os.path.join(THUMB_DIR, f"{mid}.jpg")
+                dst = os.path.join(THUMB_DIR, f"{mid}.webp")
 
             if not os.path.exists(dst):
                 missing_items.append((dict(row), dst))
@@ -592,15 +628,16 @@ def precompute_missing_thumbnails(batch_size=200, last_processed_id=0):
             
         try:
             if f_type == "image":
-                 create_image_version(src_path, dst_path, size=(600, 600), quality=90)
+                 create_image_version(src_path, dst_path, size=(600, 600), quality=85)
             elif f_type == "audio":
                  create_audio_thumb(dst_path)
             else:
-                 create_video_thumb(src_path, dst_path)
+                 # Videos use smaller thumbnails (400x400) for faster generation
+                 create_video_thumb(src_path, dst_path, size=(400, 400))
         except Exception as e:
             logger.error(f"Failed to precompute thumb for media ID {media_id}: {e}")
             
-    # Use ThreadPoolExecutor to speed up generation, especially for many images
+    # Use ThreadPoolExecutor with THUMB_WORKERS (4) for parallel generation
     with concurrent.futures.ThreadPoolExecutor(max_workers=THUMB_WORKERS) as executor:
         list(executor.map(process_thumb, missing_items))
         
