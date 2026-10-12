@@ -120,8 +120,6 @@ def gallery():
         "items": items
     })
     
-    # Cache gallery responses for 30 seconds to reduce load
-    # Clients can refetch after 30s to get new items
-    response.headers['Cache-Control'] = 'public, max-age=30, must-revalidate'
-    
+    # Ensure gallery queries are never cached so fresh scans, deletions, and likes are immediately reflected
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return response
