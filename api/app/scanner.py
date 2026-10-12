@@ -247,6 +247,98 @@ def update_scan_status(progress, total):
     with open(SCAN_STATUS_PATH, 'w') as f:
         json.dump({"progress": progress, "total": total}, f)
 
+
+def process_file_chunk(files_chunk, committer, cursor, conn, db_paths_set, db_media, offset=0):
+    """Process a chunk of files and return count processed."""
+    if not files_chunk:
+        return 0
+    
+    def process_wrapper(path_and_stat):
+        # Unpack (path, stat) tuple to reuse stat from discovery phase
+        path, stat = path_and_stat
+        try:
+            ext = os.path.splitext(path)[1].lower()
+            if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
+                ftype = "image"
+            elif ext in {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}:
+                ftype = "audio"
+            else:
+                ftype = "video"
+            
+            width, height, user_comment, exif = get_metadata(path, ftype, stat.st_size, stat.st_mtime)
+            
+            rel_path = os.path.relpath(path, GALLERY_PATH)
+            group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
+            
+            return {
+                "path": path, "filename": os.path.basename(path), "type": ftype,
+                "size": stat.st_size, "mtime": stat.st_mtime, "user_comment": user_comment,
+                "width": width, "height": height, "exif": exif, "group_tag": group_tag
+            }
+        except FileNotFoundError:
+            return None
+        except Exception as e:
+            logger.error(f"Failed to process metadata for {path}: {e}")
+            return None
+    
+    processed_count = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=CPU_WORKERS) as executor:
+        MAX_WINDOW = 1000
+        file_iter = iter(files_chunk)
+        futures = set()
+
+        # Initial submission seed
+        for _ in range(min(len(files_chunk), MAX_WINDOW)):
+            try:
+                path = next(file_iter)
+                futures.add(executor.submit(process_wrapper, path))
+            except StopIteration:
+                break
+
+        while futures:
+            done, futures = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
+            
+            for future in done:
+                try:
+                    data = future.result()
+                except Exception as e:
+                    logger.error(f"Worker generated exception: {e}")
+                    data = None
+
+                processed_count += 1
+                
+                # Refill the window
+                try:
+                    next_path = next(file_iter)
+                    futures.add(executor.submit(process_wrapper, next_path))
+                except StopIteration:
+                    pass
+
+                if data is None:
+                    continue
+                    
+                # Add to committer buffer
+                should_flush_adds = False
+                should_flush_updates = False
+                
+                if data['path'] not in db_paths_set:
+                    should_flush_adds = committer.add(tuple(data.values()))
+                else:
+                    update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
+                    should_flush_updates = committer.update(update_data)
+                
+                # Commit from main thread when batch is full
+                if should_flush_adds:
+                    committer._flush_adds(cursor, conn)
+                if should_flush_updates:
+                    committer._flush_updates(cursor, conn)
+                
+                if processed_count % 50 == 0:
+                    logger.info(f"Metadata extraction progress: {offset + processed_count}/{offset + len(files_chunk)}")
+                    update_scan_status(offset + processed_count, offset + len(files_chunk))
+    
+    return processed_count
+
 def scan(limit=None):
     init_db()
     
@@ -257,20 +349,21 @@ def scan(limit=None):
     c = conn.cursor()
 
     logger.info("Fetching existing media from database...")
-    # Fetch only needed columns and use tuples instead of dicts to drastically reduce memory usage (saves ~50-80% RAM for 100k+ files)
+    # Load path -> (size, mtime) mapping for change detection
+    # Memory: ~200-300MB for 100k files, but avoids 100k+ SQL queries during discovery
     db_media = {row["path"]: (row["size"], row["mtime"]) for row in c.execute("SELECT path, size, mtime FROM media")}
-    # Use dict keys view instead of creating a duplicate set to save memory
-    db_paths = db_media.keys()
-    logger.info(f"Database contains {len(db_paths)} records.")
+    db_paths_set = db_media.keys()
+    logger.info(f"Database contains {len(db_media)} records.")
 
     logger.info("Discovering files on disk...")
     
+    # Memory optimization: Stream processing in chunks
+    # Process and clear files in batches to avoid holding all paths in memory
+    DISCOVERY_CHUNK_SIZE = 10000  # Process 10k files at a time
     files_to_process = []
-    # Memory-efficient path tracking using hashes instead of full strings
-    # Saves 10-20x memory for large collections (100k+ files)
-    all_disk_path_hashes = set()
-    # Keep full paths only for deletion check (when not doing limited scan)
-    disk_paths_for_deletion_check = [] 
+    discovered_paths_for_deletion = set() if limit is None else None
+    total_discovered = 0
+    total_processed_count = 0 
     
     valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}
     
@@ -296,29 +389,38 @@ def scan(limit=None):
                         ext = os.path.splitext(entry.name)[1].lower()
                         if ext in valid_extensions:
                             full_path = entry.path
-                            path_hash = hash_path(full_path)
-                            all_disk_path_hashes.add(path_hash)
                             
-                            # Only store full path if not doing limited scan (for deletion check)
-                            if limit is None:
-                                disk_paths_for_deletion_check.append(full_path)
+                            # Track discovered paths for deletion check (memory-efficient set)
+                            if discovered_paths_for_deletion is not None:
+                                discovered_paths_for_deletion.add(full_path)
                             
                             needs_processing = False
                             try:
                                 # entry.stat() is cached on Windows during scandir, making it very fast
                                 stat = entry.stat()
-                                if full_path not in db_paths:
+                                if full_path not in db_paths_set:
                                     needs_processing = True
-                                elif db_media[full_path][0] != stat.st_size or \
-                                     db_media[full_path][1] != stat.st_mtime:
-                                    needs_processing = True
+                                else:
+                                    # Fast in-memory comparison (no SQL query per file)
+                                    db_size, db_mtime = db_media[full_path]
+                                    if db_size != stat.st_size or db_mtime != stat.st_mtime:
+                                        needs_processing = True
                             except (FileNotFoundError, OSError):
                                 continue # File disappeared or other error, skip
 
                             if needs_processing:
                                 # Store (path, stat) tuple to avoid redundant stat() calls later
                                 files_to_process.append((full_path, stat))
-                                if limit is not None and len(files_to_process) >= limit:
+                                
+                                # Memory optimization: Process in chunks to avoid holding all paths
+                                if len(files_to_process) >= DISCOVERY_CHUNK_SIZE:
+                                    # Process this chunk before discovering more
+                                    total_processed_count += process_file_chunk(
+                                        files_to_process, committer, c, conn, db_paths_set, db_media, total_processed_count
+                                    )
+                                    files_to_process.clear()  # Free memory
+                                
+                                if limit is not None and total_processed_count + len(files_to_process) >= limit:
                                     logger.info(f"Scan limit of {limit} reached during discovery. Stopping scan.")
                                     limit_reached = True
                                     break
@@ -326,152 +428,57 @@ def scan(limit=None):
             logger.warning(f"Could not scan directory {current_dir}: {e}")
             continue
 
-    total_files_found = len(all_disk_path_hashes)
+    total_files_found = len(discovered_paths_for_deletion) if discovered_paths_for_deletion is not None else "unknown (limited scan)"
     if limit_reached:
-        logger.info(f"Discovery stopped early. Found {total_files_found} files (partial) and identified {len(files_to_process)} for processing.")
+        logger.info(f"Discovery stopped early. Processed {total_processed_count} files so far.")
     else:
         logger.info(f"Discovery complete. Found {total_files_found} total media files.")
 
-    logger.info(f"Found {len(files_to_process)} new or modified files to process for metadata.")
+    logger.info(f"Remaining files in buffer: {len(files_to_process)}")
 
-    if not files_to_process and not (limit_reached is False and len(db_paths) != len(all_disk_path_hashes)):
-        # If nothing to process AND (limit reached OR no diff in counts implying no deletions needed?)
-        # Actually safer to just check if we have nothing to process and limit was set.
-        # If limit was NOT set, we still might need to delete.
-        if limit is not None or not (db_paths - set(disk_paths_for_deletion_check)):
-             logger.info("No new/modified files and no deletions pending. Scan complete.")
-             conn.close()
-             return
+    # Early exit if nothing to do
+    if total_processed_count == 0 and not files_to_process:
+        if limit is not None:
+            logger.info("No new/modified files found. Scan complete.")
+            conn.close()
+            return
+        # Check for deletions when full scan
+        elif discovered_paths_for_deletion is not None:
+            paths_to_delete = db_paths_set - discovered_paths_for_deletion
+            if not paths_to_delete:
+                logger.info("No new/modified files and no deletions pending. Scan complete.")
+                conn.close()
+                return
 
-    # --- Now process the identified files in parallel with StreamingBatchCommitter ---
+    # Process any remaining files from last chunk
     committer = StreamingBatchCommitter(batch_size=BATCH_SIZE)
-    
-    # Refactoring slightly to keep it clean.
-    
-    def process_wrapper(path_and_stat):
-        # Unpack (path, stat) tuple to reuse stat from discovery phase
-        path, stat = path_and_stat
-        try:
-            ext = os.path.splitext(path)[1].lower()
-            if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}:
-                ftype = "image"
-            elif ext in {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".wma", ".aac"}:
-                ftype = "audio"
-            else:
-                ftype = "video"
-            # stat already available from discovery phase - no redundant syscall
-            
-            # Check if this is an update - if size/mtime match DB, skip expensive metadata extraction
-            is_update = path in db_paths
-            if is_update:
-                db_size, db_mtime = db_media[path]
-                # If file hasn't changed, reuse existing metadata
-                if db_size == stat.st_size and db_mtime == stat.st_mtime:
-                    # This shouldn't happen because files_to_process filters these out,
-                    # but keeping as safety check
-                    return None
-            
-            width, height, user_comment, exif = get_metadata(path, ftype, stat.st_size, stat.st_mtime)
-            
-            rel_path = os.path.relpath(path, GALLERY_PATH)
-            group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
-            
-            return {
-                "path": path, "filename": os.path.basename(path), "type": ftype,
-                "size": stat.st_size, "mtime": stat.st_mtime, "user_comment": user_comment,
-                "width": width, "height": height, "exif": exif, "group_tag": group_tag
-            }
-        except FileNotFoundError:
-            return None
-        except Exception as e:
-            logger.error(f"Failed to process metadata for {path}: {e}")
-            return None
-
     if files_to_process:
-        logger.info(f"Starting metadata extraction for {len(files_to_process)} files...")
-        processed_count = 0
-        
-        # Use auto-detected CPU workers instead of hardcoded value
-        with concurrent.futures.ThreadPoolExecutor(max_workers=CPU_WORKERS) as executor:
-            # We use a set of futures with a "sliding window" to keep RAM usage low.
-            # This prevents creating thousands of Future objects at once.
-            MAX_WINDOW = 1000
-            file_iter = iter(files_to_process)
-            futures = set()
-
-            # Initial submission seed
-            for _ in range(min(len(files_to_process), MAX_WINDOW)):
-                path = next(file_iter)
-                futures.add(executor.submit(process_wrapper, path))
-
-            while futures:
-                # Wait for the first task to finish
-                done, futures = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
-                
-                for future in done:
-                    try:
-                        data = future.result()
-                    except Exception as e:
-                        logger.error(f"Worker generated exception: {e}")
-                        data = None
-
-                    processed_count += 1
-                    
-                    # Refill the window as tasks finish
-                    try:
-                        next_path = next(file_iter)
-                        futures.add(executor.submit(process_wrapper, next_path))
-                    except StopIteration:
-                        pass
-
-                    if data is None: continue
-                        
-                    # Add to committer buffer (thread-safe)
-                    should_flush_adds = False
-                    should_flush_updates = False
-                    
-                    if data['path'] not in db_paths:
-                        should_flush_adds = committer.add(tuple(data.values()))
-                    else:
-                        update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
-                        should_flush_updates = committer.update(update_data)
-                    
-                    # Commit from main thread when batch is full
-                    if should_flush_adds:
-                        committer._flush_adds(c, conn)
-                    if should_flush_updates:
-                        committer._flush_updates(c, conn)
-                    
-                    if processed_count % 50 == 0:
-                        logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
-                        update_scan_status(processed_count, len(files_to_process))
-                    
-        update_scan_status(len(files_to_process), len(files_to_process))
+        logger.info(f"Processing final chunk of {len(files_to_process)} files...")
+        total_processed_count += process_file_chunk(
+            files_to_process, committer, c, conn, db_paths_set, db_media, total_processed_count
+        )
+        files_to_process.clear()
 
     # Flush any remaining items in committer buffers
     added, updated = committer.flush(c, conn)
     logger.info(f"Streaming commit complete: {added} added, {updated} updated")
-    # Deletion Logic with hash-based comparison
+    # Deletion Logic
     if limit is not None:
         logger.info("Scan limit active. Skipping deletion phase to prevent data loss on partial scan.")
-    else:
-        # Use full paths for deletion check (only populated when limit=None)
-        disk_path_set = set(disk_paths_for_deletion_check)
-        paths_to_delete = db_paths - disk_path_set
+    elif discovered_paths_for_deletion is not None:
+        # Memory-efficient deletion: process in chunks
+        paths_to_delete = db_paths_set - discovered_paths_for_deletion
         
-        # Safety check: verify hash collisions don't cause false deletions
         if paths_to_delete:
-            verified_deletions = []
-            for path in paths_to_delete:
-                # Double-check: if path hash exists in disk but full path doesn't, it's a collision
-                if hash_path(path) in all_disk_path_hashes and path not in disk_path_set:
-                    logger.warning(f"Hash collision detected for {path}, skipping deletion")
-                    continue
-                verified_deletions.append(path)
-            
-            if verified_deletions:
-                logger.info(f"Removing {len(verified_deletions)} deleted files...")
-                c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in verified_deletions])
+            logger.info(f"Removing {len(paths_to_delete)} deleted files...")
+            # Delete in chunks to avoid large SQL statements
+            chunk_size = 1000
+            paths_list = list(paths_to_delete)
+            for i in range(0, len(paths_list), chunk_size):
+                chunk = paths_list[i:i+chunk_size]
+                c.executemany("DELETE FROM media WHERE path=?", [(path,) for path in chunk])
+                if i % 5000 == 0 and i > 0:
+                    logger.info(f"Deletion progress: {i}/{len(paths_to_delete)}")
 
     logger.info("Committing changes...")
     conn.commit()
