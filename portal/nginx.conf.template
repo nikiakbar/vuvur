@@ -15,7 +15,7 @@ server {
         # Use a variable for the upstream host to prevent Nginx from crashing if the 'api' host is not yet available at startup.
         # 127.0.0.11 is the default Docker DNS resolver.
         resolver 127.0.0.11 valid=30s;
-        set $upstream_api http://api:5000;
+        set $upstream_api ${API_HOST};
         
         proxy_pass $upstream_api;
         proxy_set_header Host $host;

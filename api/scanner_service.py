@@ -100,16 +100,22 @@ def main():
                         time.sleep(1)
                         continue
                     else:
-                        # Caught up or reached end of current pagination cycle
+                        # No thumbnails to process in this cycle
+                        # If we've completed a full pagination cycle (last_thumb_id reset to 0),
+                        # we're fully caught up - break out to trigger periodic scan
+                        if last_thumb_id == 0 and consecutive_batches == 0:
+                            logger.info("Thumbnail precomputation caught up. Breaking to periodic scan.")
+                            break
+                        
                         consecutive_batches = 0
-                        # Caught up, sleep until next check or interval ends
+                        # Sleep for a short interval before checking again
                         remaining = scan_interval - (time.time() - start_wait)
                         if remaining > 0:
-                            time.sleep(min(remaining, 60))
+                            time.sleep(min(remaining, 10))  # Check every 10s instead of 60s
                 except Exception as e:
                     logger.error(f"Error during thumbnail precomputation: {e}", exc_info=True)
                     consecutive_batches = 0
-                    time.sleep(60) # Prevent tight error loops
+                    time.sleep(10) # Prevent tight error loops
                     
             try:
                 logger.info("Starting periodic safety scan (no limit)...")
