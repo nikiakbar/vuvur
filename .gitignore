@@ -2,9 +2,11 @@
 .venv/
 __pycache__
 portal/node_modules/
-
 compose-dev.yaml
 compose-prod.yaml
+
+# Logs
+logs/
 
 # Android
 android/.idea/

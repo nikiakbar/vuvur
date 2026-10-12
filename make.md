@@ -15,6 +15,7 @@ make up
 | Command | Description | Docker Equivalent |
 | :--- | :--- | :--- |
 | `make up` | Starts services in detached mode | `docker compose -f compose-dev.yaml up -d` |
+| `make up-f` | Starts services in foreground | `docker compose -f compose-dev.yaml up` |
 | `make down` | Stops and removes containers | `docker compose -f compose-dev.yaml down` |
 | `make restart` | Restarts all services | `docker compose -f compose-dev.yaml restart` |
 | `make build` | Builds images for services | `docker compose -f compose-dev.yaml build` |

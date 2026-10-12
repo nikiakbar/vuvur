@@ -8,6 +8,7 @@ import concurrent.futures
 import time
 import sys
 import hashlib
+import threading
 from collections import deque
 from typing import TYPE_CHECKING
 
@@ -44,62 +45,68 @@ def hash_path(path: str) -> int:
 
 class StreamingBatchCommitter:
     """
-    Streaming batch committer that commits to DB as soon as a batch is ready.
-    Uses deques for O(1) append/clear and commits immediately when threshold reached.
+    Thread-safe streaming batch committer.
+    Collects records from worker threads and commits in main thread only.
+    Uses deques for O(1) append/clear.
     """
-    def __init__(self, cursor, connection, batch_size=100):
-        self.cursor = cursor
-        self.connection = connection
+    def __init__(self, batch_size=100):
         self.batch_size = batch_size
         self.add_buffer = deque()
         self.update_buffer = deque()
         self.total_added = 0
         self.total_updated = 0
+        self._lock = threading.Lock()
     
     def add(self, record):
-        """Add a record to insert buffer, commit if batch is full."""
-        self.add_buffer.append(record)
-        if len(self.add_buffer) >= self.batch_size:
-            self._flush_adds()
+        """Thread-safe: Add a record to insert buffer."""
+        with self._lock:
+            self.add_buffer.append(record)
+            return len(self.add_buffer) >= self.batch_size
     
     def update(self, record):
-        """Add a record to update buffer, commit if batch is full."""
-        self.update_buffer.append(record)
-        if len(self.update_buffer) >= self.batch_size:
-            self._flush_updates()
+        """Thread-safe: Add a record to update buffer."""
+        with self._lock:
+            self.update_buffer.append(record)
+            return len(self.update_buffer) >= self.batch_size
     
-    def _flush_adds(self):
-        """Commit all pending inserts."""
-        if not self.add_buffer:
-            return
-        count = len(self.add_buffer)
+    def _flush_adds(self, cursor, connection):
+        """Commit all pending inserts. MUST be called from main thread only."""
+        with self._lock:
+            if not self.add_buffer:
+                return
+            count = len(self.add_buffer)
+            records = list(self.add_buffer)
+            self.add_buffer.clear()
+        
         logger.info(f"Streaming insert: committing {count} files...")
-        self.cursor.executemany(
+        cursor.executemany(
             "INSERT INTO media (path, filename, type, size, mtime, user_comment, width, height, exif, group_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            self.add_buffer
+            records
         )
-        self.connection.commit()
+        connection.commit()
         self.total_added += count
-        self.add_buffer.clear()  # O(1) clear
     
-    def _flush_updates(self):
-        """Commit all pending updates."""
-        if not self.update_buffer:
-            return
-        count = len(self.update_buffer)
+    def _flush_updates(self, cursor, connection):
+        """Commit all pending updates. MUST be called from main thread only."""
+        with self._lock:
+            if not self.update_buffer:
+                return
+            count = len(self.update_buffer)
+            records = list(self.update_buffer)
+            self.update_buffer.clear()
+        
         logger.info(f"Streaming update: committing {count} files...")
-        self.cursor.executemany(
+        cursor.executemany(
             "UPDATE media SET size=?, mtime=?, user_comment=?, width=?, height=?, exif=?, group_tag=? WHERE path=?",
-            self.update_buffer
+            records
         )
-        self.connection.commit()
+        connection.commit()
         self.total_updated += count
-        self.update_buffer.clear()  # O(1) clear
     
-    def flush(self):
-        """Flush any remaining items in buffers."""
-        self._flush_adds()
-        self._flush_updates()
+    def flush(self, cursor, connection):
+        """Flush any remaining items in buffers. MUST be called from main thread only."""
+        self._flush_adds(cursor, connection)
+        self._flush_updates(cursor, connection)
         return self.total_added, self.total_updated
 
 def get_video_dimensions_cached(video_path, file_size, file_mtime, cursor):
@@ -337,7 +344,7 @@ def scan(limit=None):
              return
 
     # --- Now process the identified files in parallel with StreamingBatchCommitter ---
-    committer = StreamingBatchCommitter(c, conn, batch_size=BATCH_SIZE)
+    committer = StreamingBatchCommitter(batch_size=BATCH_SIZE)
     
     # Refactoring slightly to keep it clean.
     
@@ -364,7 +371,7 @@ def scan(limit=None):
                     # but keeping as safety check
                     return None
             
-            width, height, user_comment, exif = get_metadata(path, ftype, stat.st_size, stat.st_mtime, c)
+            width, height, user_comment, exif = get_metadata(path, ftype, stat.st_size, stat.st_mtime)
             
             rel_path = os.path.relpath(path, GALLERY_PATH)
             group_tag = rel_path.split(os.sep)[0] if os.sep in rel_path else None
@@ -419,12 +426,21 @@ def scan(limit=None):
 
                     if data is None: continue
                         
-                    # Stream to committer - it handles batching and commits automatically
+                    # Add to committer buffer (thread-safe)
+                    should_flush_adds = False
+                    should_flush_updates = False
+                    
                     if data['path'] not in db_paths:
-                        committer.add(tuple(data.values()))
+                        should_flush_adds = committer.add(tuple(data.values()))
                     else:
                         update_data = (data['size'], data['mtime'], data['user_comment'], data['width'], data['height'], data['exif'], data['group_tag'], data['path'])
-                        committer.update(update_data)
+                        should_flush_updates = committer.update(update_data)
+                    
+                    # Commit from main thread when batch is full
+                    if should_flush_adds:
+                        committer._flush_adds(c, conn)
+                    if should_flush_updates:
+                        committer._flush_updates(c, conn)
                     
                     if processed_count % 50 == 0:
                         logger.info(f"Metadata extraction progress: {processed_count}/{len(files_to_process)}")
@@ -433,7 +449,7 @@ def scan(limit=None):
         update_scan_status(len(files_to_process), len(files_to_process))
 
     # Flush any remaining items in committer buffers
-    added, updated = committer.flush()
+    added, updated = committer.flush(c, conn)
     logger.info(f"Streaming commit complete: {added} added, {updated} updated")
     # Deletion Logic with hash-based comparison
     if limit is not None:
@@ -463,17 +479,14 @@ def scan(limit=None):
     end_time = time.time()
     logger.info(f"Library scan finished in {end_time - start_time:.2f} seconds.")
 
-def get_metadata(path, ftype, file_size=None, file_mtime=None, cursor=None):
+def get_metadata(path, ftype, file_size=None, file_mtime=None):
     """Helper function to get all metadata for a file."""
     user_comment, width, height, exif = None, None, None, None
     if ftype == "image":
         exif, user_comment, width, height = extract_exif_data(path)
     elif ftype == 'video':
-        # Use cached dimensions if cursor provided, otherwise fall back to direct call
-        if cursor is not None and file_size is not None and file_mtime is not None:
-            width, height = get_video_dimensions_cached(path, file_size, file_mtime, cursor)
-        else:
-            width, height = get_video_dimensions(path)
+        # Always use direct ffprobe call (no cursor available in worker threads)
+        width, height = get_video_dimensions(path)
     # Audio files just return None for everything
     return width, height, user_comment, exif
 
