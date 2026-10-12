@@ -49,7 +49,7 @@ class StreamingBatchCommitter:
     Collects records from worker threads and commits in main thread only.
     Uses deques for O(1) append/clear.
     """
-    def __init__(self, batch_size=100):
+    def __init__(self, batch_size=50):
         self.batch_size = batch_size
         self.add_buffer = deque()
         self.update_buffer = deque()
@@ -359,7 +359,7 @@ def scan(limit=None):
     
     # Memory optimization: Stream processing in chunks
     # Process and clear files in batches to avoid holding all paths in memory
-    DISCOVERY_CHUNK_SIZE = 10000  # Process 10k files at a time
+    DISCOVERY_CHUNK_SIZE = 500  # Process 500 files at a time
     files_to_process = []
     discovered_paths_for_deletion = set() if limit is None else None
     total_discovered = 0
