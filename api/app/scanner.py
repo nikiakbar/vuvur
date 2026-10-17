@@ -362,6 +362,7 @@ def scan(limit=None):
     # Process and clear files in batches to avoid holding all paths in memory
     DISCOVERY_CHUNK_SIZE = 500  # Process 500 files at a time
     files_to_process = []
+    committer = StreamingBatchCommitter(batch_size=BATCH_SIZE)
     discovered_paths_for_deletion = set() if limit is None else None
     total_discovered = 0
     total_processed_count = 0
@@ -521,7 +522,6 @@ def scan(limit=None):
                 return
 
     # Process any remaining files from last chunk
-    committer = StreamingBatchCommitter(batch_size=BATCH_SIZE)
     if files_to_process:
         logger.info(f"Processing final chunk of {len(files_to_process)} files...")
         total_processed_count += process_file_chunk(
@@ -556,6 +556,16 @@ def scan(limit=None):
     end_time = time.time()
     total_elapsed = end_time - start_time
     logger.info(f"Library scan finished in {total_elapsed:.2f}s (discovery: {discovery_elapsed:.1f}s, processing: {total_elapsed - discovery_elapsed:.1f}s)")
+
+def get_image_dimensions(image_path):
+    """Get image dimensions using Pillow."""
+    from PIL import Image
+    try:
+        with Image.open(image_path) as img:
+            return img.size  # (width, height)
+    except Exception as e:
+        logger.error(f"Could not get image dimensions for {image_path}: {e}")
+        return None, None
 
 def get_metadata(path, ftype, file_size=None, file_mtime=None):
     """Helper function to get all metadata for a file."""
